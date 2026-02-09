@@ -1,15 +1,16 @@
-from fastapi import FastAPI, UploadFile, File
-from scalar_fastapi import get_scalar_api_reference
-
 # Import from your internal packages!
 from core.agent import get_tech_transfer_agent
+from fastapi import FastAPI, File, UploadFile
 from parsers.bom import parse_messy_bom
+from scalar_fastapi import get_scalar_api_reference
 
 app = FastAPI()
+
 
 @app.get("/")
 def read_root():
     return {"system": "Interlock OS", "status": "online"}
+
 
 @app.get("/api-docs", include_in_schema=False)
 async def scalar_html():
@@ -18,11 +19,13 @@ async def scalar_html():
         title="Interlock API",
     )
 
+
 @app.post("/ingest/bom")
 async def ingest_bom(file: UploadFile = File(...)):
     content = await file.read()
-    data = parse_messy_bom(content, file.filename)
+    data = parse_messy_bom(content, file.filename or "unknown")
     return {"filename": file.filename, "rows": len(data), "preview": data[:3]}
+
 
 @app.post("/agent/ask")
 async def ask_agent(question: str):
