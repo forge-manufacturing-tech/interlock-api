@@ -1,0 +1,15 @@
+[project]
+name = "interlock-api"
+version = "0.1.0"
+description = "Interlock Monorepo Workspace"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "scalar-fastapi>=1.6.1",
+]
+
+[tool.uv.workspace]
+members = [
+    "packages/*",
+    "apps/*"
+]
