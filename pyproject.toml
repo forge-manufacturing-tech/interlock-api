@@ -18,7 +18,17 @@ members = [
 dev = [
     "ruff>=0.15.0",
     "ty>=0.0.15",
+    "core",
+    "parsers",
+    "api",
+    "deploy-gcp",
 ]
+
+[tool.uv.sources]
+core = { workspace = true }
+parsers = { workspace = true }
+api = { workspace = true }
+deploy-gcp = { workspace = true }
 
 [tool.ruff]
 target-version = "py312"
