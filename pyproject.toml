@@ -23,8 +23,6 @@ dev = [
     "parsers",
     "api",
     "deploy-gcp",
-    "ui",
-    "api-client",
 ]
 
 [tool.uv.sources]
@@ -33,8 +31,6 @@ ai = { workspace = true }
 parsers = { workspace = true }
 api = { workspace = true }
 deploy-gcp = { workspace = true }
-ui = { workspace = true }
-api-client = { workspace = true }
 
 [tool.ruff]
 target-version = "py312"
