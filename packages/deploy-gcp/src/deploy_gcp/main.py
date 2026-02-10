@@ -3,6 +3,8 @@ import os
 import shutil
 import subprocess
 
+from dotenv import dotenv_values
+
 
 # Context
 def get_project_root():
@@ -43,6 +45,12 @@ def main():
     parser.add_argument(
         "--update", action="store_true", help="Unused (deploy always updates)"
     )
+    # Optional direct API key
+    parser.add_argument("--gemini-api-key", help="Gemini API Key (deprecated)")
+    # New argument for env file
+    parser.add_argument(
+        "--env-file", help="Path to .env file for environment variables"
+    )
     args = parser.parse_args()
 
     project_id = get_env_or_arg(
@@ -51,6 +59,28 @@ def main():
     region = get_env_or_arg(
         args.region, "GCP_REGION", "Enter GCP Region", DEFAULT_REGION
     )
+    gemini_key_arg = args.gemini_api_key
+    env_file = args.env_file
+
+    # Load env vars from file if provided
+    env_vars = {}
+    if env_file:
+        if os.path.exists(env_file):
+            print(f"Loading environment variables from {env_file}...")
+            env_vars = dotenv_values(env_file)
+        else:
+            print(f"Warning: Environment file {env_file} not found.")
+
+    # Override or set specific key if argument provided (legacy support)
+    if gemini_key_arg:
+        env_vars["GEMINI_API_KEY"] = gemini_key_arg
+
+    # Ensure we have the key if needed (interactive fallback if not in file or args)
+    if not env_vars.get("GEMINI_API_KEY"):
+        val = get_env_or_arg(None, "GEMINI_API_KEY", "Enter Gemini API Key")
+        if val:
+            env_vars["GEMINI_API_KEY"] = val
+
     function_name = args.function_name
 
     print(f"Deploying {function_name} to {project_id}/{region}...")
@@ -172,9 +202,18 @@ def main():
             "--allow-unauthenticated",
             "--memory",
             "1Gi",
-            # "--clear-base-image", # Only needed for migration from Buildpacks
-            "--quiet",
         ]
+
+        # Prepare env vars string
+        env_vars_list = []
+        for k, v in env_vars.items():
+            env_vars_list.append(f"{k}={v}")
+
+        if env_vars_list:
+            deploy_cmd.append("--set-env-vars")
+            deploy_cmd.append(",".join(env_vars_list))
+
+        deploy_cmd.append("--quiet")
 
         subprocess.run(deploy_cmd, check=True)
 

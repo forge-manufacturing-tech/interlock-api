@@ -19,16 +19,22 @@ dev = [
     "ruff>=0.15.0",
     "ty>=0.0.15",
     "core",
+    "ai",
     "parsers",
     "api",
     "deploy-gcp",
+    "ui",
+    "api-client",
 ]
 
 [tool.uv.sources]
 core = { workspace = true }
+ai = { workspace = true }
 parsers = { workspace = true }
 api = { workspace = true }
 deploy-gcp = { workspace = true }
+ui = { workspace = true }
+api-client = { workspace = true }
 
 [tool.ruff]
 target-version = "py312"

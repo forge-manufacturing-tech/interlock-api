@@ -18,3 +18,11 @@ This script validates:
 - If **formatting** fails, run: `uv run ruff format .`
 - If **linting** fails, fix the reported errors manually or use `uv run ruff check --fix .` (use caution with auto-fix).
 - If **type checking** fails, resolve the type errors. Do not suppress them unless absolutely necessary.
+
+## Environment Variables
+
+- **`.env`**: Local development.
+- **`.env.prod`**: Production secrets (used by `deploy.sh`).
+- Never commit the above files.
+
+- **`.env.reference`**: Example environment file. Update if new variables are added.

@@ -3,3 +3,5 @@ __pycache__
 /build_deploy
 source.zip
 **/*.egg-info
+.env*
+!.env.reference

@@ -1,13 +1,18 @@
 [project]
-name = "core"
+name = "ai"
 version = "0.1.0"
-description = "Add your description here"
+description = "AI logic for Interlock"
 readme = "README.md"
 authors = [
     { name = "Nathan Alam", email = "nathanalam99@gmail.com" }
 ]
 requires-python = ">=3.12"
-dependencies = []
+dependencies = [
+    "langchain>=1.2.9",
+    "langchain-google-genai>=0.0.1",
+    "langchain-openai>=1.1.7",
+    "python-dotenv>=1.2.1",
+]
 
 [build-system]
 requires = ["uv_build>=0.9.22,<0.10.0"]

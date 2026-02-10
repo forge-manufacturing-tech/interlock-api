@@ -1,5 +1,5 @@
 # Import from your internal packages!
-from core.agent import get_tech_transfer_agent
+from ai.agent import get_tech_transfer_agent
 from fastapi import FastAPI, File, UploadFile
 from parsers.bom import parse_messy_bom
 from scalar_fastapi import get_scalar_api_reference

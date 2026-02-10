@@ -17,3 +17,21 @@ To auto-format your code, run:
 ```bash
 uv run ruff format .
 ```
+
+## Environment Variables
+
+The project uses `.env` files for configuration. 
+
+- `.env`: Local development secrets (e.g., your personal API keys). **DO NOT COMMIT**.
+- `.env.prod`: Production secrets used for deployment. **DO NOT COMMIT**.
+- `.env.reference`: Example environment file. Update if new variables are added.
+
+To start the API with local variables:
+```bash
+./apps/api/start.sh
+```
+
+To start the API with production variables (for testing):
+```bash
+./apps/api/start.sh ./.env.prod
+```

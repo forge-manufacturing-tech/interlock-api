@@ -15,6 +15,28 @@ Start the API:
 ./apps/api/start.sh
 ```
 
+### Environment Variables
+
+The API uses `.env` files for configuration.
+
+See `.env.reference` for an example environment file.
+
+1. Create a `.env` file in the root for **local development**:
+    ```bash
+    GEMINI_API_KEY=your_local_key
+    ```
+2. Create a `.env.prod` file in the root for **production secrets** (used by deploy script):
+    ```bash
+    GEMINI_API_KEY=your_production_key
+    ```
+
+**Note:** Do NOT commit these files to git.
+
+To run locally with the **production** environment (to test before deploy):
+```bash
+./apps/api/start.sh ./.env.prod
+```
+
 ## Development
 
 ### Linting
@@ -68,25 +90,12 @@ gcloud auth application-default login
 
 ### Deploying
 
-Run the deployment script using `uv run` with the `deploy-gcp` package:
+### Deploying
+
+Run the deployment script:
 
 ```bash
-uv run --package deploy-gcp deploy-gcp \
-  --project-id interlock-485105 \
-  --bucket interlock-api-source \
-  --region us-central1
+./deploy.sh
 ```
 
-Or set environment variables:
-
-```bash
-export GCP_PROJECT_ID=interlock-485105
-export GCS_BUCKET_NAME=interlock-api-source
-uv run --package deploy-gcp deploy-gcp
-```
-
-To update an existing function, add the `--update` flag:
-
-```bash
-uv run --package deploy-gcp deploy-gcp --update
-```
+This script automatically reads secrets from the `.env.prod` file and deploys the API to Cloud Run. Make sure your `GEMINI_API_KEY` is set in `.env.prod` before deploying.

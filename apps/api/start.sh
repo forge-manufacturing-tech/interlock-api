@@ -2,4 +2,8 @@
 
 cd "$(dirname "$0")"
 
-uv run uvicorn main:app --reload
+ENV_FILE=${1:-../../.env}
+
+echo "Using environment file: $ENV_FILE"
+
+uv run uvicorn main:app --reload --env-file "$ENV_FILE"
