@@ -23,6 +23,8 @@ dev = [
     "parsers",
     "api",
     "database",
+    "interlock-graph",
+    "frontend",
 ]
 
 [tool.uv.sources]
@@ -32,6 +34,8 @@ parsers = { workspace = true }
 api = { workspace = true }
 deploy-gcp = { workspace = true }
 database = { workspace = true }
+interlock-graph = { workspace = true }
+frontend = { workspace = true }
 
 [tool.ruff]
 target-version = "py312"

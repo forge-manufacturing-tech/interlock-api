@@ -1,11 +1,10 @@
 [project]
 name = "database"
 version = "0.1.0"
-description = "Graph database manager using Kùzu for Interlock API"
+description = "SQLite database manager for Interlock API"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-    "kuzu>=0.4.2",
     "pydantic>=2.0.0",
 ]
 

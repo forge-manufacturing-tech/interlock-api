@@ -1,95 +1,128 @@
 import os
+import sqlite3
 from typing import Any
 
-import kuzu
 from pydantic import BaseModel
 
 
 class DatabaseConfig(BaseModel):
     primary_db_path: str
-    public_db_path: str | None = None
-    buffer_pool_size: int = 1024 * 1024 * 1024  # 1GB default
+    read_only_db_path: str | None = None
 
 
 class DatabaseManager:
     """
-    Manages connections to Kùzu graph databases.
-    Supports a primary (private) database and an optional attached (public) database.
-    Designed to be cloud-agnostic and work in containerized environments.
+    Manages connections to SQLite databases.
+
+    Supports a primary (read-write) database and an optional attached
+    read-only database.  SQLite files work on local filesystems and on
+    GCS FUSE / NFS mounts in production — no external server required.
     """
 
     def __init__(self, config: DatabaseConfig | None = None):
         self.config = config or self._load_config_from_env()
-        self.db = None
-        self.conn = None
+        self._conn: sqlite3.Connection | None = None
 
         self._initialize_database()
+
+    # -- Configuration -----------------------------------------------------------
 
     def _load_config_from_env(self) -> DatabaseConfig:
         """Loads configuration from environment variables."""
         return DatabaseConfig(
-            primary_db_path=os.getenv("KUZU_DB_PATH", "./interlock.kuzu"),
-            public_db_path=os.getenv("KUZU_PUBLIC_DB_PATH"),
-            buffer_pool_size=int(
-                os.getenv("KUZU_BUFFER_POOL_SIZE", 1024 * 1024 * 1024)
-            ),
+            primary_db_path=os.getenv("DB_PATH", "./data/interlock.db"),
+            read_only_db_path=os.getenv("DB_READ_ONLY_PATH"),
         )
 
-    def _initialize_database(self):
-        """Initializes the Kùzu database connection."""
-        # Ensure the directory exists if we are in read-write mode (default for primary)
+    # -- Lifecycle ---------------------------------------------------------------
+
+    def _initialize_database(self) -> None:
+        """Creates the database file (and parent dirs) and opens a connection."""
         os.makedirs(
-            os.path.dirname(os.path.abspath(self.config.primary_db_path)), exist_ok=True
+            os.path.dirname(os.path.abspath(self.config.primary_db_path)),
+            exist_ok=True,
         )
 
         try:
-            # Initialize the primary database
-            self.db = kuzu.Database(
+            self._conn = sqlite3.connect(
                 self.config.primary_db_path,
-                buffer_pool_size=self.config.buffer_pool_size,
+                check_same_thread=False,
             )
-            self.conn = kuzu.Connection(self.db)
-
-            # Note: For federation, we currently use a dual-connection strategy
-            # (managed by this class) rather than attaching at the engine level,
-            # to ensure compatibility across different environment setups.
-
+            # Return rows as sqlite3.Row so columns are accessible by name.
+            self._conn.row_factory = sqlite3.Row
+            # Enable WAL mode for better concurrent read performance.
+            self._conn.execute("PRAGMA journal_mode=WAL")
+            # Enable foreign key enforcement (off by default in SQLite).
+            self._conn.execute("PRAGMA foreign_keys=ON")
         except Exception as e:
             print(f"Failed to initialize database: {e}")
             raise
 
-    def get_public_connection(self):
-        """Returns a connection to the public database if configured."""
-        if self.config.public_db_path:
-            return kuzu.Connection(
-                kuzu.Database(self.config.public_db_path, read_only=True)
+    @property
+    def connection(self) -> sqlite3.Connection:
+        """Returns the active database connection."""
+        if self._conn is None:
+            raise RuntimeError("Database not initialized")
+        return self._conn
+
+    def get_read_only_connection(self) -> sqlite3.Connection | None:
+        """Returns a read-only connection to the secondary database, if configured."""
+        if self.config.read_only_db_path:
+            conn = sqlite3.connect(
+                f"file:{self.config.read_only_db_path}?mode=ro",
+                uri=True,
+                check_same_thread=False,
             )
+            conn.row_factory = sqlite3.Row
+            return conn
         return None
 
-    def execute(self, query: str, parameters: dict[str, Any] | None = None) -> Any:
-        """Executes a Cypher query against the primary database."""
-        if not self.conn:
-            raise RuntimeError("Database not initialized")
-        return self.conn.execute(query, parameters or {})
+    # -- Query helpers -----------------------------------------------------------
 
-    def query_public_reference(self, public_id: str) -> Any:
-        """
-        Example federated query helper.
-        This manually cross-references.
-        """
-        if not self.config.public_db_path:
-            raise RuntimeError("No Public DB configured")
+    def execute(
+        self,
+        query: str,
+        parameters: tuple[Any, ...] | dict[str, Any] | None = None,
+    ) -> sqlite3.Cursor:
+        """Executes a SQL statement against the primary database."""
+        conn = self.connection
+        return conn.execute(query, parameters or ())
 
-        # Open a temporary connection or use a cached one
-        # Ideally, cache this connection in __init__
-        public_conn = self.get_public_connection()
-        return public_conn.execute(
-            "MATCH (n) WHERE n.id = $id RETURN n", {"id": public_id}
-        )
+    def execute_many(
+        self,
+        query: str,
+        seq_of_parameters: list[tuple[Any, ...] | dict[str, Any]],
+    ) -> sqlite3.Cursor:
+        """Executes a SQL statement against many parameter sets."""
+        conn = self.connection
+        return conn.executemany(query, seq_of_parameters)
 
-    def close(self):
-        """
-        Closes the database connection?
-        Kùzu handles this automatically via RAII usually.
-        """
-        pass
+    def fetch_one(
+        self,
+        query: str,
+        parameters: tuple[Any, ...] | dict[str, Any] | None = None,
+    ) -> sqlite3.Row | None:
+        """Executes a query and returns the first row, or None."""
+        cursor = self.execute(query, parameters)
+        return cursor.fetchone()
+
+    def fetch_all(
+        self,
+        query: str,
+        parameters: tuple[Any, ...] | dict[str, Any] | None = None,
+    ) -> list[sqlite3.Row]:
+        """Executes a query and returns all rows."""
+        cursor = self.execute(query, parameters)
+        return cursor.fetchall()
+
+    def commit(self) -> None:
+        """Commits the current transaction."""
+        self.connection.commit()
+
+    # -- Cleanup -----------------------------------------------------------------
+
+    def close(self) -> None:
+        """Closes the database connection."""
+        if self._conn is not None:
+            self._conn.close()
+            self._conn = None

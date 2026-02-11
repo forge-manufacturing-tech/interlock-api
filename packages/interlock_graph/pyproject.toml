@@ -1,18 +1,14 @@
 [project]
-name = "ai"
+name = "interlock-graph"
 version = "0.1.0"
-description = "AI logic for Interlock"
+description = "CRUD repository for the Interlock manufacturing graph"
 readme = "README.md"
 authors = [
     { name = "Nathan Alam", email = "nathanalam99@gmail.com" }
 ]
 requires-python = ">=3.12"
 dependencies = [
-    "langchain>=1.2.9",
-    "langchain-google-genai>=0.0.1",
-    "langchain-openai>=1.1.7",
-    "python-dotenv>=1.2.1",
-    "interlock-graph",
+    "database",
     "models",
 ]
 
@@ -21,5 +17,5 @@ requires = ["uv_build>=0.9.22,<0.10.0"]
 build-backend = "uv_build"
 
 [tool.uv.sources]
-interlock-graph = { workspace = true }
+database = { workspace = true }
 models = { workspace = true }
