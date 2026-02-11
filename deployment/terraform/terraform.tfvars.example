@@ -1,0 +1,36 @@
+# ──────────────────────────────────────────────────────────────────────────────
+# Example Terraform Variables
+#
+# Copy this file to `terraform.tfvars` and fill in your values.
+# Do NOT commit terraform.tfvars — it may contain secrets.
+# ──────────────────────────────────────────────────────────────────────────────
+
+project_id   = "interlock-487121"
+region       = "us-central1"
+service_name = "interlock-api"
+
+# This is set automatically by deploy.sh — you usually don't need to change it.
+# docker_image = "us-central1-docker.pkg.dev/interlock-487121/interlock-api-repo/interlock-api:latest"
+
+# ── Cloud Run Sizing ─────────────────────────────────────────────────────────
+
+memory        = "1Gi"
+cpu           = "1"
+max_instances = 10
+min_instances = 0
+
+# ── Graph Database Buckets (set to true to provision) ────────────────────────
+
+enable_private_graph      = true
+# private_graph_bucket_name defaults to "{project_id}-private-graph"
+
+enable_public_graph       = true
+# public_graph_bucket_name defaults to "{project_id}-public-graph"
+
+# ── Environment Variables ────────────────────────────────────────────────────
+# These are loaded from your .env.prod file by deploy.sh.
+# You can also set them directly here:
+#
+# env_vars = {
+#   GEMINI_API_KEY = "your-api-key"
+# }

@@ -5,3 +5,15 @@ source.zip
 **/*.egg-info
 .env*
 !.env.reference
+
+# Local database files
+data/
+*.kuzu
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.backup
+*.tfplan
+terraform.tfvars
+.terraform.lock.hcl
