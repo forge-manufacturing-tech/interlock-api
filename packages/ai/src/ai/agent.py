@@ -10,9 +10,15 @@ Routes user intent into one of:
 
 from __future__ import annotations
 
+import os
 from dataclasses import asdict
 from typing import Literal
 from uuid import UUID, uuid4
+
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 from langchain_core.messages import (
     AIMessage,
@@ -696,11 +702,21 @@ specific part.
 
 def _get_llm():
     """Create the LLM instance."""
-    from langchain_ollama import ChatOllama
+    from langchain_google_genai import (
+        ChatGoogleGenerativeAI,  # ty:ignore[unresolved-import]
+    )
 
-    return ChatOllama(
-        model="granite4:3b",
+    api_key = os.getenv("GEMINI_API_KEY")
+    if not api_key:
+        raise ValueError(
+            "GEMINI_API_KEY environment variable not set. "
+            "Please set it in your .env file."
+        )
+
+    return ChatGoogleGenerativeAI(
+        model="gemini-3-flash-preview",
         temperature=0,
+        api_key=api_key,
     )
 
 
@@ -727,7 +743,12 @@ def get_tech_transfer_agent():
             HumanMessage(content=user_msg),
         ]
         response = llm.invoke(router_messages)
-        raw = response.content.strip().upper()
+
+        # Handle case where content is a list (Gemini sometimes returns lists)
+        content = response.content
+        if isinstance(content, list):
+            content = str(content)
+        raw = content.strip().upper()
 
         # Parse intent from response
         intent = "GENERAL"
@@ -868,7 +889,20 @@ def get_tech_transfer_agent():
             }
 
     def output_adapter(outputs: dict) -> str:
-        return outputs["messages"][-1].content
+        content = outputs["messages"][-1].content
+
+        # Handle Gemini's list-of-dicts format: [{'type': 'text', 'text': '...'}]
+        if isinstance(content, list):
+            # Extract text from all text blocks
+            texts = []
+            for item in content:
+                if isinstance(item, dict) and item.get("type") == "text":
+                    texts.append(item.get("text", ""))
+            if texts:
+                return "\n".join(texts)
+            return str(content)  # Fallback to string representation
+
+        return content
 
     return (
         RunnableLambda(input_adapter)
