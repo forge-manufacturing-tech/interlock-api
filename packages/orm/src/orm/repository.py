@@ -4,11 +4,18 @@ CRUD, traversal, and validation for the Interlock manufacturing tree.
 Tree invariants
 ---------------
 * Root is a ``PartNode``.
-* Every Part (except maybe raw materials if allowed, but strict mode says:)
-  must have exactly one ``created_by`` operation.
+* Every Part must have exactly one ``created_by`` operation.
 * Operations are either STANDARD or PURCHASE.
-* STANDARD operations consume Parts, Labor, and Tools.
-* PURCHASE operations consume Currency.
+* STANDARD operations:
+  - Must consume at least one Part.
+  - Must use at least one Labor or Tool (parts don't assemble themselves).
+  - Must NOT have Currency inputs.
+  - Must have a valid yield_rate in (0, 1].
+* PURCHASE operations:
+  - Must consume Currency only.
+  - Must NOT have Part, Labor, or Tool inputs.
+* All input quantities must be positive.
+* No cycles allowed.
 * One-way pointers only: part → created_by, operation → inputs.
 """
 
@@ -79,6 +86,11 @@ class GraphRepository:
         """
         if operation.op_type != OpType.PURCHASE:
             raise ValueError("Operation must be of type PURCHASE")
+        if not cost:
+            raise ValueError("Purchase operation must have at least one cost")
+        for c in cost:
+            if c.amount <= 0:
+                raise ValueError(f"Cost amount must be positive, got {c.amount}")
 
         try:
             # 1. Create Nodes
@@ -126,16 +138,65 @@ class GraphRepository:
         if operation.op_type != OpType.STANDARD:
             raise ValueError("Operation must be of type STANDARD")
 
-        # Validation: Verify all inputs exist
+        # --- Structural validation ---
+        if not input_parts:
+            raise ValueError(
+                "Standard operation must have at least one input part. "
+                "You can't manufacture something from nothing."
+            )
+        if not (input_labor or input_tools):
+            raise ValueError(
+                "Standard operation must have at least one labor or tool. "
+                "Parts don't assemble themselves."
+            )
+
+        # --- Yield rate validation ---
+        if not (0 < operation.yield_rate <= 1.0):
+            raise ValueError(
+                f"yield_rate must be in (0, 1.0], got {operation.yield_rate}. "
+                "A yield_rate of 0.95 means 5% scrap."
+            )
+
+        # --- Quantity validation ---
+        for p_input in input_parts:
+            if p_input.quantity <= 0:
+                raise ValueError(
+                    f"Part input quantity must be positive, "
+                    f"got {p_input.quantity} for {p_input.resource_id}"
+                )
+        for l_input in input_labor:
+            if l_input.quantity <= 0:
+                raise ValueError(
+                    f"Labor input quantity must be positive, "
+                    f"got {l_input.quantity} for {l_input.resource_id}"
+                )
+        for t_input in input_tools:
+            if t_input.quantity <= 0:
+                raise ValueError(
+                    f"Tool input quantity must be positive, "
+                    f"got {t_input.quantity} for {t_input.resource_id}"
+                )
+
+        # --- Existence validation ---
         for p_input in input_parts:
             existing_part = self.get_part(p_input.resource_id)
             if not existing_part:
-                raise ValueError(f"Input Part {p_input.resource_id} not found")
-            # Strict mode: Input parts must have a created_by op.
-            # But raw materials are 'purchased' so they have a purchase op.
+                raise ValueError(
+                    f"Input Part ID {p_input.resource_id} NOT FOUND. "
+                    "Please double-check the ID or use 'list_parts' "
+                    "to find available parts."
+                )
             if not self.get_created_by(existing_part.id):
                 raise ValueError(
-                    f"Input Part {existing_part.name} is invalid (orphaned/no creator)"
+                    f"Input Part '{existing_part.name}' (ID: {existing_part.id}) "
+                    "IS INVALID. It has no creator operation. "
+                    "Every part must be created by an operation. "
+                    "If this is a raw material, use 'purchase_part' to create it first."
+                )
+            # Self-reference check
+            if existing_part.id == part.id:
+                raise ValueError(
+                    f"A part cannot be an input to its own creation: {part.name}"
                 )
 
         for l_input in input_labor:
@@ -183,14 +244,15 @@ class GraphRepository:
         self.db.execute(
             """
             INSERT INTO part_nodes
-                (id, name, description, status)
-            VALUES (?, ?, ?, ?)
+                (id, name, description, status, unit_of_measure)
+            VALUES (?, ?, ?, ?, ?)
             """,
             (
                 str(part.id),
                 part.name,
                 part.description,
                 part.status.value,
+                part.unit_of_measure,
             ),
         )
         return part
@@ -342,13 +404,14 @@ class GraphRepository:
         cur = self.db.execute(
             """
             UPDATE part_nodes
-            SET name = ?, description = ?, status = ?
+            SET name = ?, description = ?, status = ?, unit_of_measure = ?
             WHERE id = ?
             """,
             (
                 part.name,
                 part.description,
                 part.status.value,
+                part.unit_of_measure,
                 str(part.id),
             ),
         )
@@ -402,12 +465,23 @@ class GraphRepository:
     # ===============================================================
 
     def create_labor(self, labor: LaborNode) -> LaborNode:
+        if labor.hourly_rate < 0:
+            raise ValueError(
+                f"Labor hourly_rate must be non-negative, got {labor.hourly_rate}"
+            )
         self.db.execute(
             """
-            INSERT INTO labor_nodes (id, name, description, hourly_rate)
-            VALUES (?, ?, ?, ?)
+            INSERT INTO labor_nodes
+                (id, name, description, hourly_rate, skill_level)
+            VALUES (?, ?, ?, ?, ?)
             """,
-            (str(labor.id), labor.name, labor.description, labor.hourly_rate),
+            (
+                str(labor.id),
+                labor.name,
+                labor.description,
+                labor.hourly_rate,
+                labor.skill_level,
+            ),
         )
         self.db.commit()
         return labor
@@ -433,12 +507,22 @@ class GraphRepository:
             raise ValueError(f"Linked Part {tool.linked_part_id} not found")
         if not self.get_created_by(linked_part.id):
             raise ValueError(f"Linked Part {linked_part.name} is invalid (orphaned)")
+        if tool.cost_rate < 0:
+            raise ValueError(
+                f"Tool cost_rate must be non-negative, got {tool.cost_rate}"
+            )
+        if tool.setup_time_minutes < 0:
+            raise ValueError(
+                f"Tool setup_time_minutes must be non-negative, "
+                f"got {tool.setup_time_minutes}"
+            )
 
         self.db.execute(
             """
             INSERT INTO tool_nodes
-                (id, name, description, linked_part_id, cost_rate, rate_unit)
-            VALUES (?, ?, ?, ?, ?, ?)
+                (id, name, description, linked_part_id,
+                 cost_rate, rate_unit, setup_time_minutes)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 str(tool.id),
@@ -447,6 +531,7 @@ class GraphRepository:
                 str(tool.linked_part_id),
                 tool.cost_rate,
                 tool.rate_unit,
+                tool.setup_time_minutes,
             ),
         )
         self.db.commit()
@@ -471,16 +556,20 @@ class GraphRepository:
             """
             INSERT INTO operation_nodes
                 (id, name, description, op_type,
-                 estimated_duration_minutes,
+                 instructions, setup_time_minutes,
+                 estimated_duration_minutes, yield_rate,
                  cost_estimate, properties)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 str(op.id),
                 op.name,
                 op.description,
                 op.op_type.value,
+                op.instructions,
+                op.setup_time_minutes,
                 op.estimated_duration_minutes,
+                op.yield_rate,
                 op.cost_estimate,
                 json.dumps(op.properties),
             ),
@@ -521,7 +610,10 @@ class GraphRepository:
             UPDATE operation_nodes
             SET name = ?, description = ?,
                 op_type = ?,
+                instructions = ?,
+                setup_time_minutes = ?,
                 estimated_duration_minutes = ?,
+                yield_rate = ?,
                 cost_estimate = ?,
                 properties = ?
             WHERE id = ?
@@ -530,7 +622,10 @@ class GraphRepository:
                 op.name,
                 op.description,
                 op.op_type.value,
+                op.instructions,
+                op.setup_time_minutes,
                 op.estimated_duration_minutes,
+                op.yield_rate,
                 op.cost_estimate,
                 json.dumps(op.properties),
                 str(op.id),
@@ -815,11 +910,18 @@ class GraphRepository:
     def validate_tree(self, root_id: UUID) -> ValidationResult:
         """
         Validate tree from root part.
-        1. Root must be PartNode.
-        2. Non-root parts must have created_by op.
-        3. Ops must have inputs.
-        4. PURCHASE ops must ONLY have Currency inputs.
-        5. STANDARD ops must NOT have Currency inputs.
+
+        Checks
+        ------
+        1.  Root must be a PartNode.
+        2.  Every part must have a ``created_by`` operation.
+        3.  PURCHASE ops must ONLY have Currency inputs (≥1).
+        4.  STANDARD ops must NOT have Currency inputs.
+        5.  STANDARD ops must have at least one input Part.
+        6.  STANDARD ops must have at least one Labor or Tool.
+        7.  All input quantities must be positive.
+        8.  ``yield_rate`` on STANDARD ops must be in (0, 1].
+        9.  No cycles in the tree.
         """
         errs: list[ValidationError] = []
         root = self.get_part(root_id)
@@ -828,37 +930,42 @@ class GraphRepository:
             return ValidationResult(False, [ValidationError(root_id, "Root not found")])
 
         visited: set[str] = set()
-        queue: list[BaseNode] = [root]
+        # Track the path for cycle detection
+        queue: list[tuple[BaseNode, set[str]]] = [(root, set())]
 
         while queue:
-            node = queue.pop(0)
+            node, path = queue.pop(0)
             nk = str(node.id)
             if nk in visited:
+                # If we've already fully processed this node, skip
                 continue
+
+            # Cycle detection
+            if nk in path:
+                errs.append(
+                    ValidationError(
+                        node.id,
+                        f"Cycle detected at node '{node.name}' (ID: {node.id})",
+                    )
+                )
+                continue
+
             visited.add(nk)
+            current_path = path | {nk}
 
             if isinstance(node, PartNode):
                 op = self.get_created_by(node.id)
                 if op is None:
-                    # If this part is a root, it's fine.
-                    # But if we arrived here by traversal, it's an input.
-                    # Does every input part need a creator?
-                    # "A part... can be the root... only children... single op".
-                    # Basically, if it's not purchased, it must have a creator unless
-                    # it's a raw material?
-                    # I'll stick to: If it's a leaf part, it must be created by PURCHASE
-                    # to allow entry?
-                    # Or maybe raw materials have no created_by.
-                    # Assuming strict tree: "Purchase... means that the Part it creates
-                    # is purchased".
-                    # So essentially, raw materials are parts created by Purchase Op.
-                    # So if op is None, it's an error unless it's being defined?
-                    # Let's say: If NO created_by, it's invalid unless it's a "Ghost" or
-                    # intended error.
-                    # But for now I'll just validate graph connectivity.
-                    pass
+                    errs.append(
+                        ValidationError(
+                            node.id,
+                            f"Part '{node.name}' has no creator operation. "
+                            f"Every part must be created by a Purchase or "
+                            f"Standard operation.",
+                        )
+                    )
                 else:
-                    queue.append(op)
+                    queue.append((op, current_path))
 
             elif isinstance(node, OperationNode):
                 # Check inputs
@@ -882,8 +989,17 @@ class GraphRepository:
                                 f"Purchase Op '{node.name}' has no currency inputs",
                             )
                         )
+                    # Validate currency amounts are positive
                     for cq in currs:
-                        queue.append(cq.currency)
+                        if cq.quantity <= 0:
+                            errs.append(
+                                ValidationError(
+                                    node.id,
+                                    f"Purchase Op '{node.name}' has "
+                                    f"non-positive cost: {cq.quantity}",
+                                )
+                            )
+                        queue.append((cq.currency, current_path))
 
                 else:  # STANDARD
                     if currs:
@@ -893,16 +1009,68 @@ class GraphRepository:
                                 f"Standard Op '{node.name}' has currency inputs",
                             )
                         )
-                    # Must have at least something?
-                    if not (parts or labors or tools):
+                    # Must have at least one input part
+                    if not parts:
                         errs.append(
                             ValidationError(
                                 node.id,
-                                f"Standard Op '{node.name}' has no inputs",
+                                f"Standard Op '{node.name}' has no input "
+                                f"parts — can't manufacture from nothing",
                             )
                         )
+                    # Must have at least one labor or tool
+                    if not (labors or tools):
+                        errs.append(
+                            ValidationError(
+                                node.id,
+                                f"Standard Op '{node.name}' requires at "
+                                f"least one Labor or Tool input",
+                            )
+                        )
+                    # Validate yield_rate
+                    if not (0 < node.yield_rate <= 1.0):
+                        errs.append(
+                            ValidationError(
+                                node.id,
+                                f"Standard Op '{node.name}' has invalid "
+                                f"yield_rate: {node.yield_rate} "
+                                f"(must be in (0, 1.0])",
+                            )
+                        )
+                    # Validate all quantities are positive
                     for pq in parts:
-                        queue.append(pq.part)
+                        if pq.quantity <= 0:
+                            errs.append(
+                                ValidationError(
+                                    node.id,
+                                    f"Standard Op '{node.name}': part "
+                                    f"'{pq.part.name}' has non-positive "
+                                    f"quantity: {pq.quantity}",
+                                )
+                            )
+                    for lq in labors:
+                        if lq.quantity <= 0:
+                            errs.append(
+                                ValidationError(
+                                    node.id,
+                                    f"Standard Op '{node.name}': labor "
+                                    f"'{lq.labor.name}' has non-positive "
+                                    f"quantity: {lq.quantity}",
+                                )
+                            )
+                    for tq in tools:
+                        if tq.quantity <= 0:
+                            errs.append(
+                                ValidationError(
+                                    node.id,
+                                    f"Standard Op '{node.name}': tool "
+                                    f"'{tq.tool.name}' has non-positive "
+                                    f"quantity: {tq.quantity}",
+                                )
+                            )
+                    # Recurse into input parts
+                    for pq in parts:
+                        queue.append((pq.part, current_path))
 
         return ValidationResult(valid=len(errs) == 0, errors=errs)
 
@@ -919,6 +1087,7 @@ class GraphRepository:
             name=str(r["name"]),
             description=r.get("description"),
             status=NodeStatus(str(r["status"])),
+            unit_of_measure=str(r.get("unit_of_measure", "each")),
         )
 
     @staticmethod
@@ -939,6 +1108,7 @@ class GraphRepository:
             name=str(r["name"]),
             description=r.get("description"),
             hourly_rate=float(r.get("hourly_rate", 0.0)),
+            skill_level=r.get("skill_level"),
         )
 
     @staticmethod
@@ -951,6 +1121,7 @@ class GraphRepository:
             linked_part_id=UUID(str(r["linked_part_id"])),
             cost_rate=float(r.get("cost_rate", 0.0)),
             rate_unit=str(r.get("rate_unit", "hour")),
+            setup_time_minutes=float(r.get("setup_time_minutes", 0.0)),
         )
 
     @staticmethod
@@ -963,7 +1134,10 @@ class GraphRepository:
             name=str(r["name"]),
             description=r.get("description"),
             op_type=OpType(str(r["op_type"])),
-            estimated_duration_minutes=float(str(r["estimated_duration_minutes"])),
-            cost_estimate=float(str(r["cost_estimate"])),
+            instructions=r.get("instructions"),
+            setup_time_minutes=float(r.get("setup_time_minutes", 0.0)),
+            estimated_duration_minutes=float(r.get("estimated_duration_minutes", 0.0)),
+            yield_rate=float(r.get("yield_rate", 1.0)),
+            cost_estimate=float(r.get("cost_estimate", 0.0)),
             properties=props,
         )

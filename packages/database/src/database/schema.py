@@ -36,6 +36,7 @@ _DDL: list[str] = [
         description     TEXT,
         status          TEXT NOT NULL DEFAULT 'PENDING'
             CHECK (status IN ('PENDING', 'APPROVED', 'REJECTED')),
+        unit_of_measure TEXT NOT NULL DEFAULT 'each',
         created_by_id   TEXT,
         created_by_type TEXT
     )
@@ -52,7 +53,9 @@ _DDL: list[str] = [
     CREATE TABLE IF NOT EXISTS labor_nodes (
         id              TEXT PRIMARY KEY,
         name            TEXT NOT NULL,
-        description     TEXT
+        description     TEXT,
+        hourly_rate     REAL NOT NULL DEFAULT 0.0,
+        skill_level     TEXT
     )
     """,
     """
@@ -61,7 +64,10 @@ _DDL: list[str] = [
         name            TEXT NOT NULL,
         description     TEXT,
         linked_part_id  TEXT NOT NULL
-            REFERENCES part_nodes(id)
+            REFERENCES part_nodes(id),
+        cost_rate       REAL NOT NULL DEFAULT 0.0,
+        rate_unit       TEXT NOT NULL DEFAULT 'hour',
+        setup_time_minutes REAL NOT NULL DEFAULT 0.0
     )
     """,
     """
@@ -70,7 +76,10 @@ _DDL: list[str] = [
         name                        TEXT NOT NULL,
         description                 TEXT,
         op_type                     TEXT NOT NULL DEFAULT 'STANDARD',
+        instructions                TEXT,
+        setup_time_minutes          REAL NOT NULL DEFAULT 0.0,
         estimated_duration_minutes  REAL NOT NULL DEFAULT 0.0,
+        yield_rate                  REAL NOT NULL DEFAULT 1.0,
         cost_estimate               REAL NOT NULL DEFAULT 0.0,
         properties                  TEXT NOT NULL DEFAULT '{}'
     )
@@ -82,8 +91,9 @@ _DDL: list[str] = [
             REFERENCES operation_nodes(id) ON DELETE CASCADE,
         part_id         TEXT NOT NULL
             REFERENCES part_nodes(id) ON DELETE CASCADE,
-        quantity        REAL NOT NULL DEFAULT 0.0,
-        unit            TEXT NOT NULL DEFAULT 'pcs',
+        quantity        REAL NOT NULL DEFAULT 0.0
+            CHECK (quantity > 0),
+        unit            TEXT NOT NULL DEFAULT 'each',
         PRIMARY KEY (operation_id, part_id)
     )
     """,
@@ -93,7 +103,8 @@ _DDL: list[str] = [
             REFERENCES operation_nodes(id) ON DELETE CASCADE,
         labor_id        TEXT NOT NULL
             REFERENCES labor_nodes(id) ON DELETE CASCADE,
-        quantity        REAL NOT NULL DEFAULT 0.0,
+        quantity        REAL NOT NULL DEFAULT 0.0
+            CHECK (quantity > 0),
         unit            TEXT NOT NULL DEFAULT 'hours',
         PRIMARY KEY (operation_id, labor_id)
     )
@@ -104,8 +115,9 @@ _DDL: list[str] = [
             REFERENCES operation_nodes(id) ON DELETE CASCADE,
         tool_id         TEXT NOT NULL
             REFERENCES tool_nodes(id) ON DELETE CASCADE,
-        quantity        REAL NOT NULL DEFAULT 0.0,
-        unit            TEXT NOT NULL DEFAULT 'pcs',
+        quantity        REAL NOT NULL DEFAULT 0.0
+            CHECK (quantity > 0),
+        unit            TEXT NOT NULL DEFAULT 'hours',
         PRIMARY KEY (operation_id, tool_id)
     )
     """,
@@ -115,7 +127,8 @@ _DDL: list[str] = [
             REFERENCES operation_nodes(id) ON DELETE CASCADE,
         currency_id     TEXT NOT NULL
             REFERENCES currency_nodes(id) ON DELETE CASCADE,
-        quantity        REAL NOT NULL DEFAULT 0.0,
+        quantity        REAL NOT NULL DEFAULT 0.0
+            CHECK (quantity > 0),
         unit            TEXT NOT NULL DEFAULT 'units',
         PRIMARY KEY (operation_id, currency_id)
     )

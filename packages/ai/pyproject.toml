@@ -11,9 +11,11 @@ dependencies = [
     "langchain>=1.2.9",
     "langchain-google-genai>=0.0.1",
     "langchain-openai>=1.1.7",
+    "langgraph>=1.0.8",
     "python-dotenv>=1.2.1",
     "orm",
     "models",
+    "langchain-ollama>=1.0.1",
 ]
 
 [build-system]
