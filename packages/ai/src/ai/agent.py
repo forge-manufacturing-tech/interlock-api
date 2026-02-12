@@ -2,45 +2,109 @@ import os
 from dataclasses import asdict
 from uuid import UUID
 
-from interlock_graph.main import (
-    add_equipment,
-    add_input,
-    clear_created_by,
-    create_operation,
-    create_part,
+from langchain_core.tools import tool
+from langchain_google_genai import ChatGoogleGenerativeAI
+from models.main import (
+    BaseNode,
+    CurrencyNode,
+    CurrencyQuantity,
+    LaborNode,
+    LaborQuantity,
+    NodeStatus,
+    OperationNode,
+    OpType,
+    PartNode,
+    PartQuantity,
+    QuantityInput,
+    ToolNode,
+    ToolQuantity,
+)
+from orm.main import (
+    create_currency,
+    create_labor,
+    create_tool,
     delete_operation,
     delete_part,
     get_ancestors,
-    get_consumers,
     get_created_by,
-    get_equipment,
+    get_currency,
     get_full_timeline,
-    get_inputs,
+    get_input_currencies,
+    get_input_labor,
+    get_input_parts,
+    get_input_tools,
+    get_labor,
     get_leaf_currencies,
     get_node_by_id,
     get_operation,
     get_output_part,
     get_part,
+    get_tool,
+    list_currencies,
+    list_labor,
     list_operations,
     list_parts,
-    remove_equipment,
-    remove_input,
-    set_created_by,
+    list_tools,
+    manufacture_part,
+    purchase_part,
     update_operation,
     update_part,
     validate_tree,
 )
-from langchain_core.tools import tool
-from langchain_google_genai import ChatGoogleGenerativeAI
-from models.main import BaseNode, NodeStatus, OperationNode, OpType, PartNode
 
 # ── Tool Definitions ──────────────────────────────────────────────────────────
 
+# -- Atomic / Transactional --
+
 
 @tool
-def param_create_part(part: PartNode) -> PartNode:
-    """Create a new part node in the manufacturing graph."""
-    return create_part(part)
+def param_purchase_part(
+    part: PartNode,
+    operation: OperationNode,
+    cost: list[QuantityInput],
+) -> PartNode | str:
+    """
+    Atomically create a raw material or purchased part.
+    1. Validates that the currency exists.
+    2. Creates the PartNode.
+    3. Creates the Purchase OperationNode.
+    4. Links Part -> Operation and Operation -> Currency.
+    """
+    try:
+        return purchase_part(part, operation, cost)
+    except ValueError as e:
+        return f"Error: {e}"
+
+
+@tool
+def param_manufacture_part(
+    part: PartNode,
+    operation: OperationNode,
+    input_parts: list[QuantityInput],
+    input_labor: list[QuantityInput] | None = None,
+    input_tools: list[QuantityInput] | None = None,
+) -> PartNode | str:
+    """
+    Atomically create a manufactured part from upstream inputs.
+    1. Validates that all input parts, labor, and tools exist.
+    2. Validates that input parts are valid (have a creator).
+    3. Creates the PartNode.
+    4. Creates the Standard OperationNode.
+    5. Links Part -> Operation and Operation -> Inputs.
+    """
+    try:
+        return manufacture_part(
+            part,
+            operation,
+            input_parts,
+            input_labor or [],
+            input_tools or [],
+        )
+    except ValueError as e:
+        return f"Error: {e}"
+
+
+# -- Part --
 
 
 @tool
@@ -52,20 +116,20 @@ def param_get_part(part_id: UUID) -> PartNode | None:
 @tool
 def param_list_parts(
     status: NodeStatus | None = None,
-    is_currency: bool | None = None,
     limit: int = 100,
     offset: int = 0,
 ) -> list[PartNode]:
     """List parts with optional filtering."""
-    return list_parts(
-        status=status, is_currency=is_currency, limit=limit, offset=offset
-    )
+    return list_parts(status=status, limit=limit, offset=offset)
 
 
 @tool
-def param_update_part(part: PartNode) -> PartNode:
+def param_update_part(part: PartNode) -> PartNode | str:
     """Update an existing part node."""
-    return update_part(part)
+    try:
+        return update_part(part)
+    except ValueError as e:
+        return f"Error: {e}"
 
 
 @tool
@@ -74,10 +138,83 @@ def param_delete_part(part_id: UUID) -> bool:
     return delete_part(part_id)
 
 
+# -- Currency --
+
+
 @tool
-def param_create_operation(op: OperationNode) -> OperationNode:
-    """Create a new operation node."""
-    return create_operation(op)
+def param_create_currency(curr: CurrencyNode) -> CurrencyNode | str:
+    """Create a new currency node."""
+    try:
+        return create_currency(curr)
+    except ValueError as e:
+        return f"Error: {e}"
+
+
+@tool
+def param_get_currency(curr_id: UUID) -> CurrencyNode | None:
+    """Get a currency node by ID."""
+    return get_currency(curr_id)
+
+
+@tool
+def param_list_currencies() -> list[CurrencyNode]:
+    """List all currencies."""
+    return list_currencies()
+
+
+# -- Labor --
+
+
+@tool
+def param_create_labor(labor: LaborNode) -> LaborNode | str:
+    """Create a new labor node."""
+    try:
+        return create_labor(labor)
+    except ValueError as e:
+        return f"Error: {e}"
+
+
+@tool
+def param_get_labor(labor_id: UUID) -> LaborNode | None:
+    """Get a labor node by ID."""
+    return get_labor(labor_id)
+
+
+@tool
+def param_list_labor() -> list[LaborNode]:
+    """List all labor nodes."""
+    return list_labor()
+
+
+# -- Tool --
+
+
+@tool
+def param_create_tool(tool: ToolNode) -> ToolNode | str:
+    """Create a new tool node.
+
+    The tool.linked_part_id MUST be the UUID of an existing PartNode.
+    If that part does not exist, you must create it first.
+    """
+    try:
+        return create_tool(tool)
+    except ValueError as e:
+        return f"Error: {e}"
+
+
+@tool
+def param_get_tool(tool_id: UUID) -> ToolNode | None:
+    """Get a tool node by ID."""
+    return get_tool(tool_id)
+
+
+@tool
+def param_list_tools() -> list[ToolNode]:
+    """List all tool nodes."""
+    return list_tools()
+
+
+# -- Operation --
 
 
 @tool
@@ -95,9 +232,12 @@ def param_list_operations(
 
 
 @tool
-def param_update_operation(op: OperationNode) -> OperationNode:
+def param_update_operation(op: OperationNode) -> OperationNode | str:
     """Update an existing operation node."""
-    return update_operation(op)
+    try:
+        return update_operation(op)
+    except ValueError as e:
+        return f"Error: {e}"
 
 
 @tool
@@ -106,22 +246,16 @@ def param_delete_operation(op_id: UUID) -> bool:
     return delete_operation(op_id)
 
 
+# -- Generic --
+
+
 @tool
 def param_get_node_by_id(node_id: UUID) -> BaseNode | None:
-    """Get any node (Part or Operation) by ID."""
+    """Get any node (Part, Operation, Currency, Labor, Tool) by ID."""
     return get_node_by_id(node_id)
 
 
-@tool
-def param_set_created_by(part_id: UUID, op_id: UUID) -> None:
-    """Set the operation that creates a specific part."""
-    set_created_by(part_id, op_id)
-
-
-@tool
-def param_clear_created_by(part_id: UUID) -> None:
-    """Clear the 'created_by' relationship for a part."""
-    clear_created_by(part_id)
+# -- Relationships --
 
 
 @tool
@@ -136,46 +270,34 @@ def param_get_output_part(op_id: UUID) -> PartNode | None:
     return get_output_part(op_id)
 
 
-@tool
-def param_add_input(op_id: UUID, part_id: UUID) -> None:
-    """Add a part as an input to an operation."""
-    add_input(op_id, part_id)
+# -- Inputs --
 
 
 @tool
-def param_remove_input(op_id: UUID, part_id: UUID) -> bool:
-    """Remove a part input from an operation."""
-    return remove_input(op_id, part_id)
+def param_get_input_parts(op_id: UUID) -> list[PartQuantity]:
+    """Get input parts for an operation."""
+    return get_input_parts(op_id)
 
 
 @tool
-def param_get_inputs(op_id: UUID) -> list[PartNode]:
-    """Get all input parts for an operation."""
-    return get_inputs(op_id)
+def param_get_input_labor(op_id: UUID) -> list[LaborQuantity]:
+    """Get input labor for an operation."""
+    return get_input_labor(op_id)
 
 
 @tool
-def param_get_consumers(part_id: UUID) -> list[OperationNode]:
-    """Get all operations that consume a specific part."""
-    return get_consumers(part_id)
+def param_get_input_tools(op_id: UUID) -> list[ToolQuantity]:
+    """Get input tools for an operation."""
+    return get_input_tools(op_id)
 
 
 @tool
-def param_add_equipment(op_id: UUID, part_id: UUID) -> None:
-    """Add a part as equipment/tooling for an operation."""
-    add_equipment(op_id, part_id)
+def param_get_input_currencies(op_id: UUID) -> list[CurrencyQuantity]:
+    """Get input currencies for an operation."""
+    return get_input_currencies(op_id)
 
 
-@tool
-def param_remove_equipment(op_id: UUID, part_id: UUID) -> bool:
-    """Remove equipment/tooling from an operation."""
-    return remove_equipment(op_id, part_id)
-
-
-@tool
-def param_get_equipment(op_id: UUID) -> list[PartNode]:
-    """Get all equipment/tooling used by an operation."""
-    return get_equipment(op_id)
+# -- Traversal --
 
 
 @tool
@@ -191,7 +313,7 @@ def param_get_ancestors(part_id: UUID) -> list[PartNode]:
 
 
 @tool
-def param_get_leaf_currencies(part_id: UUID) -> list[PartNode]:
+def param_get_leaf_currencies(part_id: UUID) -> list[CurrencyNode]:
     """Get all leaf currency nodes (raw costs) upstream."""
     return get_leaf_currencies(part_id)
 
@@ -218,32 +340,47 @@ def get_tech_transfer_agent():
         raise ValueError("GEMINI_API_KEY environment variable not set")
 
     llm = ChatGoogleGenerativeAI(
-        model="gemini-3-flash-preview", google_api_key=os.environ["GEMINI_API_KEY"]
+        model="gemini-3-flash-preview",
+        google_api_key=os.environ["GEMINI_API_KEY"],
     )
 
     tools = [
-        param_create_part,
+        # Atomic
+        param_purchase_part,
+        param_manufacture_part,
+        # Part
         param_get_part,
         param_list_parts,
         param_update_part,
         param_delete_part,
-        param_create_operation,
+        # Currency
+        param_create_currency,
+        param_get_currency,
+        param_list_currencies,
+        # Labor
+        param_create_labor,
+        param_get_labor,
+        param_list_labor,
+        # Tool
+        param_create_tool,
+        param_get_tool,
+        param_list_tools,
+        # Operation
         param_get_operation,
         param_list_operations,
         param_update_operation,
         param_delete_operation,
+        # Generic
         param_get_node_by_id,
-        param_set_created_by,
-        param_clear_created_by,
+        # Relationships
         param_get_created_by,
         param_get_output_part,
-        param_add_input,
-        param_remove_input,
-        param_get_inputs,
-        param_get_consumers,
-        param_add_equipment,
-        param_remove_equipment,
-        param_get_equipment,
+        # Inputs
+        param_get_input_parts,
+        param_get_input_labor,
+        param_get_input_tools,
+        param_get_input_currencies,
+        # Traversal
         param_get_full_timeline,
         param_get_ancestors,
         param_get_leaf_currencies,
@@ -252,10 +389,14 @@ def get_tech_transfer_agent():
 
     system_prompt = (
         "You are an expert in manufacturing tech transfer. "
-        "You have access to a graph database of parts and operations. "
-        "Use the provided tools to inspect, modify, "
-        "and validate the manufacturing graph. "
-        "Answer the user's questions based on the graph data. "
+        "You have access to a graph database of parts, operations, "
+        "labor, tools, and currency. "
+        "You MUST build the manufacturing graph from the bottom up. "
+        "Start by creating 'purchased' parts (raw materials) using "
+        "the 'param_purchase_part' tool with a Currency input. "
+        "Then, use 'param_manufacture_part' to create sub-assemblies "
+        "and final products using those existing parts as inputs. "
+        "Never create a part without defining its operation and inputs immediately. "
         "If you perform an action, explain what you did."
     )
 

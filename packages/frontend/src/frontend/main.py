@@ -8,6 +8,8 @@ from frontend.api import (
     check_health,
     get_part_details,
     get_parts,
+    get_tree_structure,
+    get_trees,
     ingest_bom,
 )
 
@@ -137,7 +139,7 @@ with st.sidebar:
 
     nav_option = st.radio(
         "Navigation",
-        ["🤖 Agent Chat", "📊 Parts Explorer", "📥 BOM Ingest"],
+        ["🤖 Agent Chat", "📊 Parts Explorer", "🌳 Tree Visualizer", "📥 BOM Ingest"],
         label_visibility="collapsed",
     )
 
@@ -289,6 +291,124 @@ elif nav_option == "📊 Parts Explorer":
                     st.error("Part not found")
     else:
         st.info("No parts found in the database.")
+
+
+elif nav_option == "🌳 Tree Visualizer":
+    st.title("Manufacturing Tree Visualizer")
+    st.markdown(
+        "Visualize the end-to-end manufacturing hierarchy for each distinct product."
+    )
+
+    # Fetch root parts (distinct trees)
+    with st.spinner("Loading trees..."):
+        roots = get_trees()
+
+    if not roots:
+        st.info(
+            "No completed trees found. Use the Agent or BOM Ingest to build the graph."
+        )
+    else:
+        selected_root_name = st.selectbox(
+            "Select a Product Tree to Visualize",
+            options=[f"{r['name']} ({r['id'][:8]})" for r in roots],
+        )
+
+        # Get original root ID
+        selected_root_id = next(
+            r["id"]
+            for r in roots
+            if f"{r['name']} ({r['id'][:8]})" == selected_root_name
+        )
+
+        with st.spinner("Building visualization..."):
+            tree_data = get_tree_structure(selected_root_id)
+
+            if tree_data:
+                # We can use graphviz for a nice visual
+                import graphviz
+
+                dot = graphviz.Digraph(comment="Manufacturing Tree")
+                dot.attr(bgcolor="transparent")
+                dot.attr(rankdir="TB")  # Top to Bottom
+
+                # Node styles
+                dot.attr(
+                    "node",
+                    shape="box",
+                    style="filled,rounded",
+                    fontname="Inter",
+                    fontsize="10",
+                )
+
+                def add_to_graph(node, parent_id=None):
+                    node_id = node["id"]
+                    label = node["name"]
+                    ntype = node["type"]
+
+                    # Styling based on type
+                    color = "#3B82F6"  # Default blue
+                    fontcolor = "white"
+
+                    if ntype == "part":
+                        color = "#1E40AF"  # Dark blue
+                        label = f"{label}\n(Part)"
+                    elif ntype == "operation":
+                        color = "#8B5CF6"  # Purple
+                        label = f"{label}\n({node.get('op_type', 'OP')})"
+                        shape = "ellipse"
+                        dot.node(
+                            node_id,
+                            label,
+                            fillcolor=color,
+                            fontcolor=fontcolor,
+                            shape=shape,
+                        )
+                    elif ntype == "currency":
+                        color = "#10B981"  # Green
+                        label = (
+                            f"{label}\n{node.get('quantity', 0)} {node.get('unit', '')}"
+                        )
+                    elif ntype == "labor":
+                        color = "#F59E0B"  # Amber
+                        label = (
+                            f"{label}\n{node.get('quantity', 0)} {node.get('unit', '')}"
+                        )
+                    elif ntype == "tool":
+                        color = "#6366F1"  # Indigo
+                        label = (
+                            f"{label}\n{node.get('quantity', 0)} {node.get('unit', '')}"
+                        )
+
+                    if ntype != "operation":
+                        # Add quantity info to label if it's an input
+                        if "quantity" in node and ntype != "part":
+                            pass  # Already added above
+
+                        dot.node(node_id, label, fillcolor=color, fontcolor=fontcolor)
+
+                    if parent_id:
+                        dot.edge(parent_id, node_id)
+                        # Reverse flow for Tech Tree?
+                        # Actually standard tech tree is inputs -> output.
+                        # But our data is Root -> children (inputs).
+                        # So parent_id is the "consumer".
+                        # Edge: child (input) -> parent (consumer)
+
+                    for child in node.get("children", []):
+                        add_to_graph(child, node_id)
+
+                # Build the graph
+                add_to_graph(tree_data)
+
+                st.markdown('<div class="glass-card">', unsafe_allow_html=True)
+                st.graphviz_chart(dot, use_container_width=True)
+                st.markdown("</div>", unsafe_allow_html=True)
+
+                # Raw data view
+                with st.expander("View Raw Tree Data"):
+                    st.json(tree_data)
+            else:
+                st.error("Failed to load tree structure.")
 
 elif nav_option == "📥 BOM Ingest":
     st.title("Bill of Materials Ingestion")

@@ -1,5 +1,5 @@
 [project]
-name = "interlock-graph"
+name = "orm"
 version = "0.1.0"
 description = "CRUD repository for the Interlock manufacturing graph"
 readme = "README.md"

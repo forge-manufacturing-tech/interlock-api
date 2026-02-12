@@ -3,8 +3,8 @@ from uuid import UUID
 
 from ai.agent import get_tech_transfer_agent
 from fastapi import FastAPI, File, HTTPException, UploadFile
-from interlock_graph.main import get_part, list_parts
 from models.main import PartNode
+from orm.main import get_part, get_tree_json, list_parts, list_root_parts
 from parsers.bom import parse_messy_bom
 from scalar_fastapi import get_scalar_api_reference
 
@@ -38,9 +38,12 @@ async def chat_agent(message: str):
     The agent can inspect and modify the manufacturing graph.
     """
     agent = get_tech_transfer_agent()
-    # Note: In production, use async invoke and maintain history
-    response = agent.invoke({"question": message})
-    return {"response": response}
+    try:
+        # Note: In production, use async invoke and maintain history
+        response = agent.invoke({"question": message})
+        return {"response": response}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @app.get("/parts")
@@ -56,3 +59,15 @@ async def read_part(part_id: UUID) -> PartNode:
     if not part:
         raise HTTPException(status_code=404, detail="Part not found")
     return part
+
+
+@app.get("/trees")
+async def read_trees() -> list[PartNode]:
+    """Get all root parts (ends of trees)."""
+    return list_root_parts()
+
+
+@app.get("/trees/{part_id}")
+async def read_tree_structure(part_id: UUID) -> dict:
+    """Get a recursive tree structure starting from part_id."""
+    return get_tree_json(part_id)

@@ -11,12 +11,11 @@ from pydantic import BaseModel, Field
 
 class OpType(StrEnum):
     """
-    Discriminator for operations.  Keep this minimal — specific
-    behaviour lives in the ``properties`` dict, not in subclasses.
+    Discriminator for operations.
     """
 
-    STANDARD = "STANDARD"  # Generic transformation / manual step
-    PURCHASE = "PURCHASE"  # Acquiring material (subsumes outsource)
+    STANDARD = "STANDARD"  # Uses Labor, Parts, Tools
+    PURCHASE = "PURCHASE"  # Uses Currency
 
 
 class NodeStatus(StrEnum):
@@ -25,45 +24,96 @@ class NodeStatus(StrEnum):
     REJECTED = "REJECTED"
 
 
-# --- Nodes ---
+# --- Base Node ---
 
 
 class BaseNode(BaseModel):
     """Common fields for every node in the tree."""
 
     id: UUID = Field(default_factory=uuid4)
-    name: str
+    name: str | None = None  # Currency might not have a name? Or keep it.
     description: str | None = None
+
+
+# --- Constituent Nodes ---
 
 
 class PartNode(BaseNode):
     """
-    A part, material, or state in the manufacturing tree.
-
-    Currency nodes (``is_currency=True``) are the leaf inputs that
-    represent money spent and do NOT require an upstream operation.
+    An assembly or state. Can be the root of a tree.
+    Children = single operation node (created_by).
     """
 
     status: NodeStatus = NodeStatus.PENDING
-    is_currency: bool = False
+
+
+class CurrencyNode(BaseNode):
+    """
+    Represents a currency (e.g. USD, EUR).
+    """
+
+    iso_code: str | None = None  # e.g. "USD"
+
+
+class LaborNode(BaseNode):
+    """
+    Represents a type of labor (e.g. 'Welding', 'Assembly').
+    """
+
+    pass
+
+
+class ToolNode(BaseNode):
+    """
+    Represents a tool instance or type.
+    Must reference a PartNode that defines the tool physically.
+    """
+
+    linked_part_id: UUID
 
 
 class OperationNode(BaseNode):
     """
-    A single, generic operation that transforms input parts into one
-    output part.
-
-    Type-specific data (instructions, supplier info, programme number,
-    etc.) is stored in the ``properties`` dict so the schema never
-    needs to change when new operation flavours are introduced.
-
-    Equipment / tooling consumed by the operation (but not destroyed)
-    is tracked via the ``operation_equipment`` junction table — those
-    parts are referenced for depreciation and capacity planning but
-    are **not** consumed inputs.
+    A procedure with a description.
+    STANDARD: consumes Labor, Parts, Tools.
+    PURCHASE: consumes Currency.
     """
 
     op_type: OpType = OpType.STANDARD
+    # These estimates might be derived or direct, keeping them for now
     estimated_duration_minutes: float = 0.0
     cost_estimate: float = 0.0
     properties: dict[str, Any] = Field(default_factory=dict)
+
+
+# --- Quantities (Edges/Inputs) ---
+
+
+class QuantityBase(BaseModel):
+    quantity: float
+    unit: str  # e.g. "kg", "hours", "pieces"
+
+
+class PartQuantity(QuantityBase):
+    part: PartNode
+
+
+class LaborQuantity(QuantityBase):
+    labor: LaborNode
+
+
+class ToolQuantity(QuantityBase):
+    tool: ToolNode
+
+
+class CurrencyQuantity(QuantityBase):
+    currency: CurrencyNode
+
+
+class QuantityInput(QuantityBase):
+    """
+    Input structure for specifying quantities by ID.
+    Used for creating operations.
+    """
+
+    resource_id: UUID

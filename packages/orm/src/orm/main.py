@@ -12,13 +12,21 @@ from uuid import UUID
 from database.manager import DatabaseManager
 from models.main import (
     BaseNode,
+    CurrencyNode,
+    CurrencyQuantity,
+    LaborNode,
+    LaborQuantity,
     NodeStatus,
     OperationNode,
     OpType,
     PartNode,
+    PartQuantity,
+    QuantityInput,
+    ToolNode,
+    ToolQuantity,
 )
 
-from interlock_graph.repository import (
+from orm.repository import (
     GraphRepository,
     ValidationResult,
 )
@@ -27,14 +35,29 @@ __all__ = [
     # Classes
     "GraphRepository",
     "ValidationResult",
+    # Atomic Transactions
+    "purchase_part",
+    "manufacture_part",
     # Part CRUD
-    "create_part",
     "get_part",
     "list_parts",
+    "list_root_parts",
     "update_part",
     "delete_part",
+    # Currency CRUD
+    "create_currency",
+    "get_currency",
+    "list_currencies",
+    "delete_currency",
+    # Labor CRUD
+    "create_labor",
+    "get_labor",
+    "list_labor",
+    # Tool CRUD
+    "create_tool",
+    "get_tool",
+    "list_tools",
     # Operation CRUD
-    "create_operation",
     "get_operation",
     "list_operations",
     "update_operation",
@@ -42,23 +65,21 @@ __all__ = [
     # Any-node lookup
     "get_node_by_id",
     # Relationships — created_by
-    "set_created_by",
-    "clear_created_by",
     "get_created_by",
     "get_output_part",
-    # Relationships — inputs
-    "add_input",
-    "remove_input",
-    "get_inputs",
-    "get_consumers",
-    # Relationships — equipment
-    "add_equipment",
-    "remove_equipment",
-    "get_equipment",
+    # Relationships — inputs (Parts)
+    "get_input_parts",
+    # Relationships — inputs (Labor)
+    "get_input_labor",
+    # Relationships — inputs (Tools)
+    "get_input_tools",
+    # Relationships — inputs (Currency)
+    "get_input_currencies",
     # Traversal
     "get_full_timeline",
     "get_ancestors",
     "get_leaf_currencies",
+    "get_tree_json",
     # Validation
     "validate_tree",
 ]
@@ -71,14 +92,32 @@ def _repo(db: DatabaseManager | None = None) -> GraphRepository:
     return GraphRepository(db or DatabaseManager())
 
 
-# ── Part CRUD ──────────────────────────────────────────────────────
+# ── Atomic Transactions ────────────────────────────────────────────
 
 
-def create_part(
+def purchase_part(
     part: PartNode,
+    operation: OperationNode,
+    cost: list[QuantityInput],
     db: DatabaseManager | None = None,
 ) -> PartNode:
-    return _repo(db).create_part(part)
+    return _repo(db).purchase_part(part, operation, cost)
+
+
+def manufacture_part(
+    part: PartNode,
+    operation: OperationNode,
+    input_parts: list[QuantityInput],
+    input_labor: list[QuantityInput],
+    input_tools: list[QuantityInput],
+    db: DatabaseManager | None = None,
+) -> PartNode:
+    return _repo(db).manufacture_part(
+        part, operation, input_parts, input_labor, input_tools
+    )
+
+
+# ── Part CRUD ──────────────────────────────────────────────────────
 
 
 def get_part(
@@ -91,17 +130,21 @@ def get_part(
 def list_parts(
     *,
     status: NodeStatus | None = None,
-    is_currency: bool | None = None,
     limit: int = 100,
     offset: int = 0,
     db: DatabaseManager | None = None,
 ) -> list[PartNode]:
     return _repo(db).list_parts(
         status=status,
-        is_currency=is_currency,
         limit=limit,
         offset=offset,
     )
+
+
+def list_root_parts(
+    db: DatabaseManager | None = None,
+) -> list[PartNode]:
+    return _repo(db).list_root_parts()
 
 
 def update_part(
@@ -118,14 +161,83 @@ def delete_part(
     return _repo(db).delete_part(part_id)
 
 
-# ── Operation CRUD ─────────────────────────────────────────────────
+# ── Currency CRUD ──────────────────────────────────────────────────
 
 
-def create_operation(
-    op: OperationNode,
+def create_currency(
+    curr: CurrencyNode,
     db: DatabaseManager | None = None,
-) -> OperationNode:
-    return _repo(db).create_operation(op)
+) -> CurrencyNode:
+    return _repo(db).create_currency(curr)
+
+
+def get_currency(
+    curr_id: UUID,
+    db: DatabaseManager | None = None,
+) -> CurrencyNode | None:
+    return _repo(db).get_currency(curr_id)
+
+
+def list_currencies(
+    db: DatabaseManager | None = None,
+) -> list[CurrencyNode]:
+    return _repo(db).list_currencies()
+
+
+def delete_currency(
+    curr_id: UUID,
+    db: DatabaseManager | None = None,
+) -> bool:
+    return _repo(db).delete_currency(curr_id)
+
+
+# ── Labor CRUD ─────────────────────────────────────────────────────
+
+
+def create_labor(
+    labor: LaborNode,
+    db: DatabaseManager | None = None,
+) -> LaborNode:
+    return _repo(db).create_labor(labor)
+
+
+def get_labor(
+    labor_id: UUID,
+    db: DatabaseManager | None = None,
+) -> LaborNode | None:
+    return _repo(db).get_labor(labor_id)
+
+
+def list_labor(
+    db: DatabaseManager | None = None,
+) -> list[LaborNode]:
+    return _repo(db).list_labor()
+
+
+# ── Tool CRUD ──────────────────────────────────────────────────────
+
+
+def create_tool(
+    tool: ToolNode,
+    db: DatabaseManager | None = None,
+) -> ToolNode:
+    return _repo(db).create_tool(tool)
+
+
+def get_tool(
+    tool_id: UUID,
+    db: DatabaseManager | None = None,
+) -> ToolNode | None:
+    return _repo(db).get_tool(tool_id)
+
+
+def list_tools(
+    db: DatabaseManager | None = None,
+) -> list[ToolNode]:
+    return _repo(db).list_tools()
+
+
+# ── Operation CRUD ─────────────────────────────────────────────────
 
 
 def get_operation(
@@ -172,21 +284,6 @@ def get_node_by_id(
 # ── Relationships: created_by ──────────────────────────────────────
 
 
-def set_created_by(
-    part_id: UUID,
-    op_id: UUID,
-    db: DatabaseManager | None = None,
-) -> None:
-    _repo(db).set_created_by(part_id, op_id)
-
-
-def clear_created_by(
-    part_id: UUID,
-    db: DatabaseManager | None = None,
-) -> None:
-    _repo(db).clear_created_by(part_id)
-
-
 def get_created_by(
     part_id: UUID,
     db: DatabaseManager | None = None,
@@ -204,60 +301,36 @@ def get_output_part(
 # ── Relationships: inputs ─────────────────────────────────────────
 
 
-def add_input(
-    op_id: UUID,
-    part_id: UUID,
-    db: DatabaseManager | None = None,
-) -> None:
-    _repo(db).add_input(op_id, part_id)
-
-
-def remove_input(
-    op_id: UUID,
-    part_id: UUID,
-    db: DatabaseManager | None = None,
-) -> bool:
-    return _repo(db).remove_input(op_id, part_id)
-
-
-def get_inputs(
+# Parts
+def get_input_parts(
     op_id: UUID,
     db: DatabaseManager | None = None,
-) -> list[PartNode]:
-    return _repo(db).get_inputs(op_id)
+) -> list[PartQuantity]:
+    return _repo(db).get_input_parts(op_id)
 
 
-def get_consumers(
-    part_id: UUID,
-    db: DatabaseManager | None = None,
-) -> list[OperationNode]:
-    return _repo(db).get_consumers(part_id)
-
-
-# ── Relationships: equipment ──────────────────────────────────────
-
-
-def add_equipment(
-    op_id: UUID,
-    part_id: UUID,
-    db: DatabaseManager | None = None,
-) -> None:
-    _repo(db).add_equipment(op_id, part_id)
-
-
-def remove_equipment(
-    op_id: UUID,
-    part_id: UUID,
-    db: DatabaseManager | None = None,
-) -> bool:
-    return _repo(db).remove_equipment(op_id, part_id)
-
-
-def get_equipment(
+# Labor
+def get_input_labor(
     op_id: UUID,
     db: DatabaseManager | None = None,
-) -> list[PartNode]:
-    return _repo(db).get_equipment(op_id)
+) -> list[LaborQuantity]:
+    return _repo(db).get_input_labor(op_id)
+
+
+# Tools
+def get_input_tools(
+    op_id: UUID,
+    db: DatabaseManager | None = None,
+) -> list[ToolQuantity]:
+    return _repo(db).get_input_tools(op_id)
+
+
+# Currency
+def get_input_currencies(
+    op_id: UUID,
+    db: DatabaseManager | None = None,
+) -> list[CurrencyQuantity]:
+    return _repo(db).get_input_currencies(op_id)
 
 
 # ── Traversal ─────────────────────────────────────────────────────
@@ -280,8 +353,15 @@ def get_ancestors(
 def get_leaf_currencies(
     part_id: UUID,
     db: DatabaseManager | None = None,
-) -> list[PartNode]:
+) -> list[CurrencyNode]:
     return _repo(db).get_leaf_currencies(part_id)
+
+
+def get_tree_json(
+    part_id: UUID,
+    db: DatabaseManager | None = None,
+) -> dict:
+    return _repo(db).get_tree_json(part_id)
 
 
 # ── Validation ────────────────────────────────────────────────────

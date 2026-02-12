@@ -50,3 +50,21 @@ def get_part_details(part_id: str) -> dict[str, Any] | None:
         return response.json()
     except requests.RequestException:
         return None
+
+
+def get_trees() -> list[dict[str, Any]]:
+    try:
+        response = requests.get(f"{BASE_URL}/trees")
+        response.raise_for_status()
+        return response.json()
+    except requests.RequestException:
+        return []
+
+
+def get_tree_structure(part_id: str) -> dict[str, Any]:
+    try:
+        response = requests.get(f"{BASE_URL}/trees/{part_id}")
+        response.raise_for_status()
+        return response.json()
+    except requests.RequestException:
+        return {}
