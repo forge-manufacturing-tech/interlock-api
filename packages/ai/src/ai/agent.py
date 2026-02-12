@@ -6,6 +6,7 @@ from langchain_core.tools import tool
 from langchain_google_genai import ChatGoogleGenerativeAI
 from models.main import (
     BaseNode,
+    CurrencyAmount,
     CurrencyNode,
     CurrencyQuantity,
     LaborNode,
@@ -61,14 +62,15 @@ from orm.main import (
 def param_purchase_part(
     part: PartNode,
     operation: OperationNode,
-    cost: list[QuantityInput],
+    cost: list[CurrencyAmount],
 ) -> PartNode | str:
     """
     Atomically create a raw material or purchased part.
-    1. Validates that the currency exists.
+    1. Validates operation type.
     2. Creates the PartNode.
     3. Creates the Purchase OperationNode.
-    4. Links Part -> Operation and Operation -> Currency.
+    4. Creates a NEW CurrencyNode for this transaction (based on cost).
+    5. Links Part -> Operation and Operation -> Currency.
     """
     try:
         return purchase_part(part, operation, cost)
@@ -389,15 +391,23 @@ def get_tech_transfer_agent():
 
     system_prompt = (
         "You are an expert in manufacturing tech transfer. "
-        "You have access to a graph database of parts, operations, "
-        "labor, tools, and currency. "
-        "You MUST build the manufacturing graph from the bottom up. "
-        "Start by creating 'purchased' parts (raw materials) using "
-        "the 'param_purchase_part' tool with a Currency input. "
-        "Then, use 'param_manufacture_part' to create sub-assemblies "
-        "and final products using those existing parts as inputs. "
-        "Never create a part without defining its operation and inputs immediately. "
-        "If you perform an action, explain what you did."
+        "You use a graph database to model manufacturing processes. "
+        "RULES FOR GRAPH CONSTRUCTION: "
+        "1. STRICT COSTING: only PURCHASE operations can use Currency inputs. "
+        "   Do NOT assign Currency directly to a STANDARD operation. "
+        "   Labor and Tool costs are automatically calculated "
+        "by the system based on usage. "
+        "2. BOTTOM-UP BUILD: Start with raw materials (PURCHASE ops). "
+        "   Then build sub-assemblies and final products (STANDARD ops). "
+        "3. TREE STRUCTURE: Prefer deep, vertical trees over flat ones. "
+        "   Try to limit STANDARD operations to 2 input parts max. "
+        "   It is better to have multiple sequential sub-assemblies "
+        "than one huge assembly step. "
+        "4. INPUTS REQUIRED: Every STANDARD operation MUST have inputs: "
+        "   - Input Parts (from previous steps) "
+        "   - Labor (type and hours) "
+        "   - Tools (type and hours) "
+        "Never create an orphan part. Always define its operation immediately."
     )
 
     graph = create_agent(

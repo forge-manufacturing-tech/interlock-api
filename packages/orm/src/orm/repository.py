@@ -22,6 +22,7 @@ from database.manager import DatabaseManager
 from database.schema import initialize_schema
 from models.main import (
     BaseNode,
+    CurrencyAmount,
     CurrencyNode,
     CurrencyQuantity,
     LaborNode,
@@ -69,7 +70,7 @@ class GraphRepository:
         self,
         part: PartNode,
         operation: OperationNode,
-        cost: list[QuantityInput],
+        cost: list[CurrencyAmount],
     ) -> PartNode:
         """
         Atomically create a Part, a Purchase Operation, and link them
@@ -79,11 +80,6 @@ class GraphRepository:
         if operation.op_type != OpType.PURCHASE:
             raise ValueError("Operation must be of type PURCHASE")
 
-        # Verify currency inputs exist
-        for c_input in cost:
-            if not self.get_currency(c_input.resource_id):
-                raise ValueError(f"Currency {c_input.resource_id} not found")
-
         try:
             # 1. Create Nodes
             self._create_part(part)
@@ -92,13 +88,21 @@ class GraphRepository:
             # 2. Link Part -> Operation
             self._set_created_by(part.id, operation.id)
 
-            # 3. Link Operation -> Currency Inputs
+            # 3. Create Currency Nodes and Link
             for c_input in cost:
+                # Create a unique currency node for this transaction
+                curr_node = CurrencyNode(
+                    name=f"Cost: {part.name}",
+                    iso_code=c_input.currency_code,
+                    description=f"Purchase cost for {part.name}",
+                )
+                self.create_currency(curr_node)
+
                 self._add_input_currency(
                     operation.id,
-                    c_input.resource_id,
-                    c_input.quantity,
-                    c_input.unit,
+                    curr_node.id,
+                    c_input.amount,
+                    c_input.currency_code,
                 )
 
             self.db.commit()
@@ -159,6 +163,7 @@ class GraphRepository:
                 self._add_input_labor(
                     operation.id, l_input.resource_id, l_input.quantity, l_input.unit
                 )
+
             for t_input in input_tools:
                 self._add_input_tool(
                     operation.id, t_input.resource_id, t_input.quantity, t_input.unit
@@ -244,6 +249,9 @@ class GraphRepository:
             "children": [],
         }
 
+        # Calculate cost rollup
+        total_unit_cost = 0.0
+
         op = self.get_created_by(part.id)
         if op:
             op_node = {
@@ -255,15 +263,26 @@ class GraphRepository:
             }
             res["children"].append(op_node)
 
-            # Input Parts
+            # --- Cost Accumulation ---
+
+            # 1. Input Parts (Recursive cost)
             for pq in self.get_input_parts(op.id):
                 child_part = self.get_tree_json(pq.part.id)
+                child_cost = child_part.get("unit_cost", 0.0)
+
+                # Check quantity unit compatibility if needed
+                # Simplification: assuming quantity is linear mulitiplier
+                part_cost_contribution = pq.quantity * child_cost
+                total_unit_cost += part_cost_contribution
+
                 child_part["quantity"] = pq.quantity
                 child_part["unit"] = pq.unit
                 op_node["children"].append(child_part)
 
-            # Input Currencies
+            # 2. Input Currencies (Direct purchase cost)
             for cq in self.get_input_currencies(op.id):
+                total_unit_cost += cq.quantity  # amount
+
                 op_node["children"].append(
                     {
                         "id": str(cq.currency.id),
@@ -275,8 +294,11 @@ class GraphRepository:
                     }
                 )
 
-            # Input Labor
+            # 3. Input Labor (Calculated cost)
             for lq in self.get_input_labor(op.id):
+                cost = lq.quantity * lq.labor.hourly_rate
+                total_unit_cost += cost
+
                 op_node["children"].append(
                     {
                         "id": str(lq.labor.id),
@@ -284,23 +306,36 @@ class GraphRepository:
                         "type": "labor",
                         "quantity": lq.quantity,
                         "unit": lq.unit,
+                        "hourly_rate": lq.labor.hourly_rate,
+                        "cost": cost,
                     }
                 )
 
-            # Input Tools
+            # 4. Input Tools (Calculated cost)
             for tq in self.get_input_tools(op.id):
-                # Tools also have a linked part, but for tree visualization
-                # we usually just show the tool node.
-                op_node["children"].append(
-                    {
-                        "id": str(tq.tool.id),
-                        "name": tq.tool.name,
-                        "type": "tool",
-                        "quantity": tq.quantity,
-                        "unit": tq.unit,
-                    }
-                )
+                cost = tq.quantity * tq.tool.cost_rate
+                total_unit_cost += cost
 
+                tool_entry = {
+                    "id": str(tq.tool.id),
+                    "name": tq.tool.name,
+                    "type": "tool",
+                    "quantity": tq.quantity,
+                    "unit": tq.unit,
+                    "cost_rate": tq.tool.cost_rate,
+                    "rate_unit": tq.tool.rate_unit,
+                    "cost": cost,
+                }
+
+                # Recursively expand the tool's linked part
+                if tq.tool.linked_part_id:
+                    tool_entry["linked_part"] = self.get_tree_json(
+                        tq.tool.linked_part_id
+                    )
+
+                op_node["children"].append(tool_entry)
+
+        res["unit_cost"] = total_unit_cost
         return res
 
     def update_part(self, part: PartNode) -> PartNode:
@@ -368,8 +403,11 @@ class GraphRepository:
 
     def create_labor(self, labor: LaborNode) -> LaborNode:
         self.db.execute(
-            "INSERT INTO labor_nodes (id, name, description) VALUES (?, ?, ?)",
-            (str(labor.id), labor.name, labor.description),
+            """
+            INSERT INTO labor_nodes (id, name, description, hourly_rate)
+            VALUES (?, ?, ?, ?)
+            """,
+            (str(labor.id), labor.name, labor.description, labor.hourly_rate),
         )
         self.db.commit()
         return labor
@@ -398,10 +436,18 @@ class GraphRepository:
 
         self.db.execute(
             """
-            INSERT INTO tool_nodes (id, name, description, linked_part_id)
-            VALUES (?, ?, ?, ?)
+            INSERT INTO tool_nodes
+                (id, name, description, linked_part_id, cost_rate, rate_unit)
+            VALUES (?, ?, ?, ?, ?, ?)
             """,
-            (str(tool.id), tool.name, tool.description, str(tool.linked_part_id)),
+            (
+                str(tool.id),
+                tool.name,
+                tool.description,
+                str(tool.linked_part_id),
+                tool.cost_rate,
+                tool.rate_unit,
+            ),
         )
         self.db.commit()
         return tool
@@ -892,6 +938,7 @@ class GraphRepository:
             id=UUID(str(r["id"])),
             name=str(r["name"]),
             description=r.get("description"),
+            hourly_rate=float(r.get("hourly_rate", 0.0)),
         )
 
     @staticmethod
@@ -902,6 +949,8 @@ class GraphRepository:
             name=str(r["name"]),
             description=r.get("description"),
             linked_part_id=UUID(str(r["linked_part_id"])),
+            cost_rate=float(r.get("cost_rate", 0.0)),
+            rate_unit=str(r.get("rate_unit", "hour")),
         )
 
     @staticmethod

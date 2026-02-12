@@ -6,6 +6,8 @@ from uuid import UUID, uuid4
 
 from pydantic import BaseModel, Field
 
+from .inputs import CurrencyAmount
+
 # --- Enums ---
 
 
@@ -60,7 +62,7 @@ class LaborNode(BaseNode):
     Represents a type of labor (e.g. 'Welding', 'Assembly').
     """
 
-    pass
+    hourly_rate: float = 0.0
 
 
 class ToolNode(BaseNode):
@@ -70,6 +72,8 @@ class ToolNode(BaseNode):
     """
 
     linked_part_id: UUID
+    cost_rate: float = 0.0
+    rate_unit: str = "hour"
 
 
 class OperationNode(BaseNode):
@@ -117,3 +121,22 @@ class QuantityInput(QuantityBase):
     """
 
     resource_id: UUID
+
+
+__all__ = [
+    "OpType",
+    "NodeStatus",
+    "BaseNode",
+    "PartNode",
+    "CurrencyNode",
+    "LaborNode",
+    "ToolNode",
+    "OperationNode",
+    "QuantityBase",
+    "PartQuantity",
+    "LaborQuantity",
+    "ToolQuantity",
+    "CurrencyQuantity",
+    "QuantityInput",
+    "CurrencyAmount",
+]

@@ -7,7 +7,6 @@ from frontend.api import (
     chat_agent,
     check_health,
     get_part_details,
-    get_parts,
     get_tree_structure,
     get_trees,
     ingest_bom,
@@ -233,7 +232,7 @@ elif nav_option == "📊 Parts Explorer":
 
     # Fetch parts
     with st.spinner("Loading parts..."):
-        parts_data = get_parts(limit=100)
+        parts_data = get_trees()
 
     if parts_data:
         df = pd.DataFrame(parts_data)
@@ -351,7 +350,9 @@ elif nav_option == "🌳 Tree Visualizer":
 
                     if ntype == "part":
                         color = "#1E40AF"  # Dark blue
-                        label = f"{label}\n(Part)"
+                        uc = node.get("unit_cost")
+                        cost_str = f"\n${uc:,.2f}" if uc is not None else ""
+                        label = f"{label}\n(Part){cost_str}"
                     elif ntype == "operation":
                         color = "#8B5CF6"  # Purple
                         label = f"{label}\n({node.get('op_type', 'OP')})"
@@ -388,20 +389,21 @@ elif nav_option == "🌳 Tree Visualizer":
 
                     if parent_id:
                         dot.edge(parent_id, node_id)
-                        # Reverse flow for Tech Tree?
-                        # Actually standard tech tree is inputs -> output.
-                        # But our data is Root -> children (inputs).
-                        # So parent_id is the "consumer".
-                        # Edge: child (input) -> parent (consumer)
 
                     for child in node.get("children", []):
                         add_to_graph(child, node_id)
+
+                    # Special case: Tools can have a linked part definition
+                    if "linked_part" in node:
+                        linked = node["linked_part"]
+                        # We can visualize this as a child of the tool
+                        add_to_graph(linked, node_id)
 
                 # Build the graph
                 add_to_graph(tree_data)
 
                 st.markdown('<div class="glass-card">', unsafe_allow_html=True)
-                st.graphviz_chart(dot, use_container_width=True)
+                st.graphviz_chart(dot, width="stretch")
                 st.markdown("</div>", unsafe_allow_html=True)
 
                 # Raw data view

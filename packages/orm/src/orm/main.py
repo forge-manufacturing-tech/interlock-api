@@ -12,6 +12,7 @@ from uuid import UUID
 from database.manager import DatabaseManager
 from models.main import (
     BaseNode,
+    CurrencyAmount,
     CurrencyNode,
     CurrencyQuantity,
     LaborNode,
@@ -98,7 +99,7 @@ def _repo(db: DatabaseManager | None = None) -> GraphRepository:
 def purchase_part(
     part: PartNode,
     operation: OperationNode,
-    cost: list[QuantityInput],
+    cost: list[CurrencyAmount],
     db: DatabaseManager | None = None,
 ) -> PartNode:
     return _repo(db).purchase_part(part, operation, cost)

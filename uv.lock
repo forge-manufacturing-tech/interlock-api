@@ -1,5 +1,5 @@
 version = 1
-revision = 2
+revision = 3
 requires-python = ">=3.12"
 resolution-markers = [
     "python_full_version >= '3.14' and sys_platform == 'win32'",
@@ -99,7 +99,7 @@ wheels = [
 [[package]]
 name = "api"
 version = "0.1.0"
-source = { virtual = "apps/api" }
+source = { editable = "apps/api" }
 dependencies = [
     { name = "ai" },
     { name = "core" },
@@ -641,7 +641,7 @@ requires-dist = [{ name = "scalar-fastapi", specifier = ">=1.6.1" }]
 [package.metadata.requires-dev]
 dev = [
     { name = "ai", editable = "packages/ai" },
-    { name = "api", virtual = "apps/api" },
+    { name = "api", editable = "apps/api" },
     { name = "core", editable = "packages/core" },
     { name = "database", editable = "packages/database" },
     { name = "frontend", editable = "packages/frontend" },
