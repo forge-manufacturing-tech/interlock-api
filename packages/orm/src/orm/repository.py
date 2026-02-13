@@ -286,12 +286,21 @@ class GraphRepository:
         return [self._to_part(r) for r in rows]
 
     def list_root_parts(self) -> list[PartNode]:
-        """Find parts that are not used as inputs to any operation."""
+        """
+        Find parts that are not used as inputs to any operation
+        (including as tools).
+        """
         rows = self.db.fetch_all(
             """
             SELECT p.* FROM part_nodes p
             LEFT JOIN operation_input_parts i ON p.id = i.part_id
             WHERE i.part_id IS NULL
+            AND p.id NOT IN (
+                SELECT t.linked_part_id
+                FROM tool_nodes t
+                JOIN operation_input_tools oit ON t.id = oit.tool_id
+                WHERE t.linked_part_id IS NOT NULL
+            )
             ORDER BY p.name
             """
         )

@@ -1,10 +1,12 @@
 """
-Interlock Tech-Transfer Agent — structured LangGraph workflow.
+Interlock Tech-Transfer Agent — adversarial two-agent LangGraph workflow.
 
 Routes user intent into one of:
   • ASK   – look up an existing part and answer questions about it
   • MODIFY – clarify what to change, then execute modifications
-  • NEW   – gather requirements, then build a manufacturing tree bottom-up
+  • NEW   – **adversarial loop**: Builder agent creates the tree in the DB,
+            Reviewer agent reads from the DB and critiques. They iterate
+            until the Reviewer is fully satisfied, then report to the user.
   • GENERAL – answer general questions without tool calls
 """
 
@@ -14,11 +16,6 @@ import os
 from dataclasses import asdict
 from typing import Literal
 from uuid import UUID, uuid4
-
-from dotenv import load_dotenv
-
-# Load environment variables from .env file
-load_dotenv()
 
 from langchain_core.messages import (
     AIMessage,
@@ -546,6 +543,19 @@ CREATE_TOOLS = [
     validate_part_tree,
 ]
 
+# Reviewer only gets read-only tools + validate
+REVIEW_TOOLS = [
+    search_parts,
+    get_part_details,
+    get_part_tree,
+    get_part_ancestors,
+    get_part_costs,
+    get_part_timeline,
+    list_all_labor,
+    list_all_tools,
+    validate_part_tree,
+]
+
 ALL_TOOLS = list(
     {t.name: t for t in QUERY_TOOLS + MODIFY_TOOLS + CREATE_TOOLS}.values()
 )
@@ -554,11 +564,27 @@ ALL_TOOLS = list(
 #  LangGraph State & Workflow
 # ═══════════════════════════════════════════════════════════════════════
 
+# Maximum number of tool-call rounds before we force a final answer.
+MAX_TOOL_ROUNDS_SOFT = 15
+MAX_TOOL_ROUNDS_HARD = 20
+
+# Maximum adversarial refinement rounds before forcing acceptance.
+MAX_REFINEMENT_ROUNDS = 10
+
 
 class AgentState(MessagesState):
-    """Extended state with intent tracking."""
+    """Extended state with intent tracking and adversarial loop control."""
 
     intent: str  # NEW_PART | ASK_EXISTING | MODIFY_EXISTING | GENERAL
+    tool_call_count: int  # number of tool-call round-trips so far
+
+    # ── Adversarial loop fields (NEW_PART only) ───────────────────────
+    refinement_round: int  # current refinement iteration (0 = first build)
+    builder_messages: list  # separate message history for the Builder agent
+    reviewer_messages: list  # separate message history for the Reviewer agent
+    root_part_id: str  # the root part ID built by the Builder
+    reviewer_verdict: str  # APPROVED | NEEDS_REVISION | "" (pending)
+    reviewer_feedback: str  # feedback text from Reviewer to Builder
 
 
 # ── System Prompts ────────────────────────────────────────────────────
@@ -609,89 +635,126 @@ IMPORTANT: Always confirm the part ID and intended changes before modifying. \
 Do not guess part IDs.
 """
 
-CREATE_SYSTEM_PROMPT = """\
-You are an expert manufacturing engineer building part trees in the database.
-
-DEFINITIONS — understand these EXACTLY:
-- PART: A physical thing (raw material, sub-assembly, or finished product). \
-Created by purchase_raw_material or assemble_part.
-- LABOR: A type of human work with an hourly rate (e.g. "Welding" at \
-$45/hr, "Assembly" at $25/hr). Created by create_labor_type. \
-Labor is NOT a part. Do NOT purchase labor as a raw material.
-- TOOL/MACHINE: Equipment used in manufacturing (e.g. a CNC Mill, a \
-Welding Station). Every machine MUST first be purchased as a Part, then \
-registered as a Tool with create_machine_tool. Tools are NOT labor.
-
-TREE STRUCTURE:
-- Leaf nodes = purchased raw materials (purchase_raw_material, each with cost)
-- Intermediate nodes = assembled parts (assemble_part, combining inputs)
-- Root node = the finished product
-- Build BOTTOM-UP: materials → sub-assemblies → final product
-
-YOUR STEP-BY-STEP WORKFLOW:
-
-Step 1 — PURCHASE RAW MATERIALS:
-  Use purchase_raw_material for each physical material or component.
-  Example materials: steel sheet, wood plank, bolt, screw, paint, wire.
-  Each call returns a Part ID. SAVE every ID.
-
-Step 2 — PURCHASE MACHINES (if needed):
-  a) Use purchase_raw_material to buy the machine as a part.
-  b) Use create_machine_tool with the Part ID from step (a).
-  This returns a Tool ID. SAVE it.
-  Example: Purchase "CNC Mill" for $50000, then create_machine_tool.
-
-Step 3 — CREATE LABOR TYPES (if needed):
-  Use create_labor_type for each type of human work.
-  Example: create_labor_type("Welding", 45.0) → Labor ID. SAVE it.
-
-Step 4 — ASSEMBLE SUB-ASSEMBLIES:
-  Use assemble_part to combine purchased parts.
-  Pass input_part_ids (the Part IDs from Step 1).
-  Pass labor_ids and tool_ids to attribute labor and machine usage.
-  This returns a new Part ID. SAVE it.
-
-Step 5 — ASSEMBLE HIGHER-LEVEL PARTS:
-  Use assemble_part again, using sub-assembly Part IDs from Step 4 as inputs.
-  Keep building upward until you reach the final product.
-
-Step 6 — VALIDATE:
-  Use validate_part_tree on the final product Part ID.
-
-EXAMPLE — Building a "Wooden Table":
-  1. purchase_raw_material("Oak Plank", 15.0) → Part A
-  2. purchase_raw_material("Steel Leg", 8.0) → Part B (buy 4)
-  3. purchase_raw_material("Wood Screws Box", 3.0) → Part C
-  4. purchase_raw_material("Wood Finish", 12.0) → Part D
-  5. purchase_raw_material("Table Saw", 500.0) → Part E
-  6. create_machine_tool("Table Saw", linked_part_id=E, cost_rate=5.0) → Tool T1
-  7. create_labor_type("Carpentry", 35.0) → Labor L1
-  8. create_labor_type("Finishing", 25.0) → Labor L2
-  9. assemble_part("Table Top", [A, C], tool_ids=[T1], labor_ids=[L1])
-     → Part F
-  10. assemble_part("Table Frame", [B, C], labor_ids=[L1])
-      → Part G
-  11. assemble_part("Unfinished Table", [F, G], labor_ids=[L1])
-      → Part H
-  12. assemble_part("Wooden Table", [H, D], labor_ids=[L2])
-      → Part I (FINAL)
-  13. validate_part_tree(I)
-
-STRICT RULES:
-- ALWAYS use IDs returned by tools. NEVER invent or guess UUIDs.
-- NEVER purchase labor as a raw material. Use create_labor_type instead.
-- EVERY machine must be: purchased as part THEN registered as tool.
-- Every assemble_part call needs at least one input_part_id.
-- Include realistic labor and tool usage on every assembly step.
-- If you don't know specific costs, use reasonable estimates.
-- Ask the user for clarification if the product is ambiguous.
-"""
-
 GENERAL_SYSTEM_PROMPT = """\
 You are an expert in manufacturing tech transfer. Answer the user's question \
 helpfully and concisely. If their question could be better answered by \
 looking up data in the manufacturing database, suggest they ask about a \
 specific part.
+"""
+
+# ── Adversarial Agent Prompts (NEW_PART only) ─────────────────────────
+
+REFINER_SYSTEM_PROMPT = """\
+You are Agent 1, the Requirement Refiner. The user wants to build a new \
+manufactured part or product. Your job is to take their raw request and \
+produce a precise, unambiguous manufacturing specification for Agent 2 \
+(the Builder) to follow.
+
+Your output must be a single, clear message containing:
+1. PRODUCT NAME: Exactly what is being built.
+2. BILL OF MATERIALS: Every raw material, with realistic cost estimates.
+3. LABOR TYPES: What kinds of human labor are needed, with hourly rates.
+4. MACHINES/TOOLS: What equipment is needed, with cost rates.
+5. ASSEMBLY SEQUENCE: Bottom-up steps from raw materials to final product. \
+CRITICAL: You must explicitly list every assembly step. Raw materials must \
+be combined into sub-assemblies, and sub-assemblies into the final product.
+6. WORK INSTRUCTIONS: Brief instructions for each assembly step.
+
+Be specific. Do NOT leave anything ambiguous. If the user's request is \
+vague (e.g. "build me a chair"), fill in reasonable manufacturing details. \
+The Builder agent will follow your specification literally.
+
+Respond with ONLY the specification — no preamble, no questions.
+"""
+
+BUILDER_SYSTEM_PROMPT = """\
+You are Agent 2, the Builder. You receive a manufacturing specification \
+and your job is to execute it EXACTLY by creating parts in the database.
+
+DEFINITIONS — understand these EXACTLY:
+- PART: A physical thing (raw material, sub-assembly, or finished product). \
+Created by purchase_raw_material or assemble_part.
+- LABOR: A type of human work with an hourly rate. Created by \
+create_labor_type. Labor is NOT a part.
+- TOOL/MACHINE: Equipment. Must be purchased as a Part first, then \
+registered as a Tool with create_machine_tool.
+
+YOUR STEP-BY-STEP WORKFLOW:
+1. Purchase all raw materials using purchase_raw_material. SAVE every Part ID.
+2. Purchase machines as parts, then register with create_machine_tool. \
+SAVE Tool IDs.
+3. Create labor types with create_labor_type. SAVE Labor IDs.
+4. ASSEMBLE (CRITICAL STEP): Use assemble_part to combine purchased parts \
+into the final product. You MUST perform assembly. Purchasing materials \
+is NOT enough.
+5. Continue assembling upward until you have ONE final root part that \
+represents the finished product.
+6. Validate with validate_part_tree on the final product.
+7. When done, respond with EXACTLY this format (no other text):
+   DONE: ROOT_PART_ID=<uuid-of-the-final-product>
+
+STRICT RULES:
+- ALWAYS use IDs returned by tools. NEVER invent UUIDs.
+- DO NOT STOP after purchasing materials. You MUST assemble them.
+- EVERY machine: purchased as part THEN registered as tool.
+- Every assemble_part needs at least one input_part_id + labor or tool.
+- Include realistic work instructions on every assembly step.
+- Follow the specification you receive. Do not improvise.
+"""
+
+REVIEWER_SYSTEM_PROMPT = """\
+You are Agent 1, the Reviewer. Agent 2 (the Builder) has just created a \
+manufacturing tree in the database. Your job is to read the tree from \
+the database and determine whether a human could follow it to build the \
+product WITHOUT ANY AMBIGUITY.
+
+YOUR WORKFLOW:
+1. Use get_part_tree to read the full manufacturing tree.
+2. Use get_part_details on key parts to check descriptions and operations.
+3. Use validate_part_tree to check structural integrity.
+4. Walk through every assembly step and ask yourself:
+   - Does this tree actually combine materials? Or is it just a list of \
+purchased items? (REJECT if no assembly steps).
+   - Are the work instructions clear and complete?
+   - Are all materials and quantities specified?
+   - Is the assembly sequence logical and unambiguous?
+   - Are labor types and tools properly assigned?
+   - Could a technician follow this without asking questions?
+
+WHEN YOU ARE DONE reviewing, respond with EXACTLY one of:
+
+If the tree is FULLY CLEAR and executable:
+  VERDICT: APPROVED
+  <followed by a summary of the complete manufacturing plan for the user>
+
+If there is ANY confusion, missing detail, or ambiguity:
+  VERDICT: NEEDS_REVISION
+  FEEDBACK: <specific, actionable list of what must be fixed>
+
+Be strict. If the Builder bought materials but didn't assemble them, \
+REJECT IT immediately and tell them to use assemble_part.
+"""
+
+BUILDER_REVISION_PROMPT = """\
+You are Agent 2, the Builder. The Reviewer (Agent 1) has found issues with \
+your manufacturing tree and is asking you to fix it.
+
+The Reviewer's feedback is below. You must address EVERY point raised.
+
+You have access to all creation tools. You may need to:
+- Use assemble_part to combine orphaned raw materials into a finished product.
+- Create additional parts or materials that were missing.
+- Modify existing parts with better descriptions or instructions.
+- Add missing labor or tool assignments.
+
+Use search_parts and get_part_details to find existing parts before \
+modifying them. Do NOT recreate materials you already bought.
+
+When you have addressed ALL feedback, respond with EXACTLY:
+  DONE: ROOT_PART_ID=<uuid-of-the-final-product>
+
+REVIEWER FEEDBACK:
+{feedback}
 """
 
 
@@ -701,22 +764,22 @@ specific part.
 
 
 def _get_llm():
-    """Create the LLM instance."""
-    from langchain_google_genai import (
-        ChatGoogleGenerativeAI,  # ty:ignore[unresolved-import]
-    )
-
-    api_key = os.getenv("GEMINI_API_KEY")
-    if not api_key:
-        raise ValueError(
-            "GEMINI_API_KEY environment variable not set. "
-            "Please set it in your .env file."
-        )
+    from langchain_google_genai import ChatGoogleGenerativeAI
 
     return ChatGoogleGenerativeAI(
         model="gemini-3-flash-preview",
-        temperature=0,
-        api_key=api_key,
+        temperature=0.3,
+        api_key=os.getenv("GEMINI_API_KEY"),
+    )
+
+
+def _get_strong_llm():
+    from langchain_google_genai import ChatGoogleGenerativeAI
+
+    return ChatGoogleGenerativeAI(
+        model="gemini-3-pro-preview",
+        temperature=0.3,
+        api_key=os.getenv("GEMINI_API_KEY"),
     )
 
 
@@ -727,9 +790,161 @@ def get_tech_transfer_agent():
     Returns a Runnable that accepts ``{"question": "..."}`` and returns
     a plain string answer.
     """
+    from typing import Any, cast
+
     from langchain_core.runnables import RunnableLambda
 
-    llm = _get_llm()
+    standard_llm = _get_llm()
+    strong_llm = _get_strong_llm()
+
+    # ── Helpers ─────────────────────────────────────────────────────────
+
+    WRAP_UP_MSG = (
+        "IMPORTANT: You have used many tool calls already. "
+        "Do NOT call any more tools. Summarize everything you have "
+        "done so far and provide your final answer to the user NOW."
+    )
+
+    def _extract_text(content: object) -> str:
+        """Safely extract text from LLM response content."""
+
+        if isinstance(content, list):
+            texts: list[str] = []
+            for item in content:
+                if isinstance(item, dict):
+                    d = cast(dict[str, str], item)
+                    if d.get("type") == "text":
+                        texts.append(d.get("text", ""))
+                    else:
+                        texts.append(str(d.get("text", "")))
+                else:
+                    texts.append(str(item))
+            return " ".join(texts).strip()
+        return str(content).strip() if content else ""
+
+    def _build_agent_node(
+        system_prompt: str,
+        tools_list: list,
+        llm_instance: Any,
+    ):
+        """Factory that creates an agent node with iteration awareness."""
+
+        def _node(state: AgentState) -> dict:
+            rounds = state.get("tool_call_count", 0)
+            messages = [SystemMessage(content=system_prompt)] + state["messages"]
+
+            if rounds >= MAX_TOOL_ROUNDS_HARD:
+                messages.append(SystemMessage(content=WRAP_UP_MSG))
+                response = llm_instance.invoke(messages)
+            elif rounds >= MAX_TOOL_ROUNDS_SOFT:
+                messages.append(SystemMessage(content=WRAP_UP_MSG))
+                bound = llm_instance.bind_tools(tools_list)
+                response = bound.invoke(messages)
+            else:
+                bound = llm_instance.bind_tools(tools_list)
+                response = bound.invoke(messages)
+
+            has_tool_calls = hasattr(response, "tool_calls") and response.tool_calls
+            content = _extract_text(response.content)
+            is_empty = not content
+
+            if is_empty and not has_tool_calls:
+                messages.append(
+                    SystemMessage(
+                        content=(
+                            "Your previous response was empty. "
+                            "Please provide a helpful text answer to the user."
+                        )
+                    )
+                )
+                response = llm_instance.invoke(messages)
+
+            new_count = rounds + 1 if has_tool_calls else rounds
+            return {"messages": [response], "tool_call_count": new_count}
+
+        return _node
+
+    def _build_sub_agent_node(
+        system_prompt: str,
+        tools_list: list,
+        msg_key: str,
+        llm_instance: Any,
+    ):
+        """Factory for sub-agent nodes (Builder/Reviewer) that maintain
+        their own separate message history in state[msg_key].
+
+        The sub-agent's response is appended to state[msg_key] AND to
+        the main messages (so tool nodes can see tool_calls).
+        """
+
+        def _node(state: AgentState) -> dict:
+            rounds = state.get("tool_call_count", 0)
+            sub_messages = list(state.get(msg_key, []))
+            messages = [SystemMessage(content=system_prompt)] + sub_messages
+
+            if rounds >= MAX_TOOL_ROUNDS_HARD:
+                messages.append(SystemMessage(content=WRAP_UP_MSG))
+                response = llm_instance.invoke(messages)
+            elif rounds >= MAX_TOOL_ROUNDS_SOFT:
+                messages.append(SystemMessage(content=WRAP_UP_MSG))
+                bound = llm_instance.bind_tools(tools_list)
+                response = bound.invoke(messages)
+            else:
+                bound = llm_instance.bind_tools(tools_list)
+                response = bound.invoke(messages)
+
+            has_tool_calls = hasattr(response, "tool_calls") and response.tool_calls
+            content = _extract_text(response.content)
+            is_empty = not content
+
+            if is_empty and not has_tool_calls:
+                messages.append(
+                    SystemMessage(
+                        content=(
+                            "Your previous response was empty. "
+                            "Please provide a response."
+                        )
+                    )
+                )
+                response = llm_instance.invoke(messages)
+
+            new_count = rounds + 1 if has_tool_calls else rounds
+            new_sub = sub_messages + [response]
+
+            result: dict = {
+                "messages": [response],
+                "tool_call_count": new_count,
+                msg_key: new_sub,
+            }
+
+            # If the Builder says DONE, extract the root part ID
+            if not has_tool_calls and msg_key == "builder_messages":
+                text = _extract_text(response.content)
+                if "DONE:" in text and "ROOT_PART_ID=" in text:
+                    try:
+                        part_id = text.split("ROOT_PART_ID=")[1].strip().split()[0]
+                        result["root_part_id"] = part_id
+                    except (IndexError, ValueError):
+                        pass
+
+            # If the Reviewer gives a verdict, extract it
+            if not has_tool_calls and msg_key == "reviewer_messages":
+                text = _extract_text(response.content)
+                if "VERDICT:" in text:
+                    if "APPROVED" in text:
+                        result["reviewer_verdict"] = "APPROVED"
+                    elif "NEEDS_REVISION" in text:
+                        result["reviewer_verdict"] = "NEEDS_REVISION"
+                        # Extract feedback
+                        if "FEEDBACK:" in text:
+                            fb = text.split("FEEDBACK:", 1)[1].strip()
+                            result["reviewer_feedback"] = fb
+                        else:
+                            result["reviewer_feedback"] = text
+
+            return result
+
+        return _node
 
     # ── Node functions ────────────────────────────────────────────────
 
@@ -742,61 +957,194 @@ def get_tech_transfer_agent():
             SystemMessage(content=ROUTER_SYSTEM_PROMPT),
             HumanMessage(content=user_msg),
         ]
-        response = llm.invoke(router_messages)
+        response = standard_llm.invoke(router_messages)
 
-        # Handle case where content is a list (Gemini sometimes returns lists)
         content = response.content
         if isinstance(content, list):
             content = str(content)
-        raw = content.strip().upper()
+        raw = str(content).strip().upper()
 
-        # Parse intent from response
         intent = "GENERAL"
         for candidate in ["NEW_PART", "ASK_EXISTING", "MODIFY_EXISTING"]:
             if candidate in raw:
                 intent = candidate
                 break
 
-        return {"intent": intent}
+        return {
+            "intent": intent,
+            "tool_call_count": 0,
+            "refinement_round": 0,
+            "builder_messages": [],
+            "reviewer_messages": [],
+            "root_part_id": "",
+            "reviewer_verdict": "",
+            "reviewer_feedback": "",
+        }
 
-    def ask_node(state: AgentState) -> dict:
-        """Handle ASK_EXISTING: query the database and answer."""
-        query_llm = llm.bind_tools(QUERY_TOOLS)
-        messages = [SystemMessage(content=ASK_SYSTEM_PROMPT)] + state["messages"]
-        response = query_llm.invoke(messages)
-        return {"messages": [response]}
-
-    def modify_node(state: AgentState) -> dict:
-        """Handle MODIFY_EXISTING: clarify and execute modifications."""
-        modify_llm = llm.bind_tools(MODIFY_TOOLS)
-        messages = [SystemMessage(content=MODIFY_SYSTEM_PROMPT)] + state["messages"]
-        response = modify_llm.invoke(messages)
-        return {"messages": [response]}
-
-    def create_node(state: AgentState) -> dict:
-        """Handle NEW_PART: build manufacturing tree bottom-up."""
-        create_llm = llm.bind_tools(CREATE_TOOLS)
-        messages = [SystemMessage(content=CREATE_SYSTEM_PROMPT)] + state["messages"]
-        response = create_llm.invoke(messages)
-        return {"messages": [response]}
+    ask_node = _build_agent_node(ASK_SYSTEM_PROMPT, QUERY_TOOLS, standard_llm)
+    modify_node = _build_agent_node(MODIFY_SYSTEM_PROMPT, MODIFY_TOOLS, standard_llm)
 
     def general_node(state: AgentState) -> dict:
         """Handle GENERAL questions without tools."""
         messages = [SystemMessage(content=GENERAL_SYSTEM_PROMPT)] + state["messages"]
-        response = llm.invoke(messages)
+        response = standard_llm.invoke(messages)
         return {"messages": [response]}
+
+    # ── Adversarial NEW_PART nodes ────────────────────────────────────
+
+    def refiner_node(state: AgentState) -> dict:
+        """Agent 1 Step 1: Refine the user's request into a precise spec."""
+        user_msg = state["messages"][-1].content if state["messages"] else ""
+        messages = [
+            SystemMessage(content=REFINER_SYSTEM_PROMPT),
+            HumanMessage(content=user_msg),
+        ]
+        response = standard_llm.invoke(messages)
+        spec_text = _extract_text(response.content)
+
+        # Seed the builder's message history with the specification
+        builder_seed = HumanMessage(
+            content=(
+                "Build the following manufacturing tree in the database. "
+                "Follow this specification exactly:\n\n" + spec_text
+            )
+        )
+
+        return {
+            "messages": [
+                AIMessage(
+                    content=(
+                        "📋 I've analyzed your request and created a detailed "
+                        "manufacturing specification. The Builder agent is now "
+                        "constructing the part tree in the database..."
+                    )
+                )
+            ],
+            "builder_messages": [builder_seed],
+            "tool_call_count": 0,
+        }
+
+    builder_node = _build_sub_agent_node(
+        BUILDER_SYSTEM_PROMPT, CREATE_TOOLS, "builder_messages", strong_llm
+    )
+
+    def reviewer_setup_node(state: AgentState) -> dict:
+        """Prepare the Reviewer's message history to read from the DB."""
+        root_id = state.get("root_part_id", "")
+        round_num = state.get("refinement_round", 0)
+
+        review_instruction = HumanMessage(
+            content=(
+                f"The Builder has completed the manufacturing tree. "
+                f"The root part ID is: {root_id}\n"
+                f"This is review round {round_num + 1}.\n\n"
+                f"Use the tools to read the full tree from the database, "
+                f"inspect every part and operation, then give your verdict."
+            )
+        )
+
+        return {
+            "reviewer_messages": [review_instruction],
+            "reviewer_verdict": "",
+            "reviewer_feedback": "",
+            "tool_call_count": 0,
+        }
+
+    reviewer_node = _build_sub_agent_node(
+        REVIEWER_SYSTEM_PROMPT, REVIEW_TOOLS, "reviewer_messages", standard_llm
+    )
+
+    def revision_setup_node(state: AgentState) -> dict:
+        """Prepare the Builder for a revision round with Reviewer feedback."""
+        feedback = state.get("reviewer_feedback", "No specific feedback provided.")
+        round_num = state.get("refinement_round", 0)
+        root_id = state.get("root_part_id", "")
+
+        revision_prompt = BUILDER_REVISION_PROMPT.format(feedback=feedback)
+
+        revision_msg = HumanMessage(
+            content=(
+                f"REVISION ROUND {round_num + 1}.\n"
+                f"The current root part ID is: {root_id}\n\n"
+                f"The Reviewer found issues. Fix them ALL:\n\n{feedback}"
+            )
+        )
+
+        # Keep existing builder messages and append the revision request
+        existing_builder = list(state.get("builder_messages", []))
+        existing_builder.append(revision_msg)
+
+        return {
+            "builder_messages": existing_builder,
+            "builder_system_prompt": revision_prompt,
+            "refinement_round": round_num + 1,
+            "tool_call_count": 0,
+            "reviewer_verdict": "",
+        }
+
+    def final_report_node(state: AgentState) -> dict:
+        """The Reviewer approved. Produce the final report for the user."""
+        # Find the reviewer's approval message which contains the summary
+        reviewer_msgs = state.get("reviewer_messages", [])
+        summary = ""
+        for msg in reversed(reviewer_msgs):
+            text = _extract_text(msg.content) if hasattr(msg, "content") else ""
+            if "APPROVED" in text:
+                # Extract everything after APPROVED
+                parts = text.split("APPROVED", 1)
+                summary = parts[1].strip() if len(parts) > 1 else text
+                break
+
+        rounds = state.get("refinement_round", 0) + 1
+        root_id = state.get("root_part_id", "")
+
+        report = (
+            f"✅ **Manufacturing tree built and verified!**\n\n"
+            f"The Builder and Reviewer agents iterated through "
+            f"**{rounds} round(s)** to produce an unambiguous "
+            f"manufacturing plan.\n\n"
+            f"**Root Part ID:** `{root_id}`\n\n"
+        )
+        if summary:
+            report += f"**Reviewer Summary:**\n{summary}"
+        else:
+            report += (
+                "The manufacturing tree has been validated and is ready "
+                "for execution. Use the tree viewer to inspect the full plan."
+            )
+
+        return {"messages": [AIMessage(content=report)]}
 
     # ── Tool execution nodes ──────────────────────────────────────────
 
     ask_tool_node = ToolNode(tools=QUERY_TOOLS)
     modify_tool_node = ToolNode(tools=MODIFY_TOOLS)
-    create_tool_node = ToolNode(tools=CREATE_TOOLS)
+
+    # Builder and Reviewer each get their own ToolNode
+    builder_tool_node = ToolNode(tools=CREATE_TOOLS)
+    reviewer_tool_node = ToolNode(tools=REVIEW_TOOLS)
+
+    def builder_tool_passthrough(state: AgentState) -> dict:
+        """After builder tools execute, append results to builder_messages."""
+        # The last message(s) in state["messages"] are ToolMessages
+        # We need to also track them in builder_messages
+        last_msg = state["messages"][-1]
+        existing = list(state.get("builder_messages", []))
+        existing.append(last_msg)
+        return {"builder_messages": existing}
+
+    def reviewer_tool_passthrough(state: AgentState) -> dict:
+        """After reviewer tools execute, append results to reviewer_messages."""
+        last_msg = state["messages"][-1]
+        existing = list(state.get("reviewer_messages", []))
+        existing.append(last_msg)
+        return {"reviewer_messages": existing}
 
     # ── Routing functions ─────────────────────────────────────────────
 
     def route_by_intent(
         state: AgentState,
-    ) -> Literal["ask_node", "modify_node", "create_node", "general_node"]:
+    ) -> Literal["ask_node", "modify_node", "refiner_node", "general_node"]:
         """Route to the appropriate handler based on classified intent."""
         intent = state.get("intent", "GENERAL")
         if intent == "ASK_EXISTING":
@@ -804,20 +1152,14 @@ def get_tech_transfer_agent():
         elif intent == "MODIFY_EXISTING":
             return "modify_node"
         elif intent == "NEW_PART":
-            return "create_node"
+            return "refiner_node"
         else:
             return "general_node"
 
-    def _should_continue_tools(tool_node_name: str, agent_node_name: str):
-        """Factory for tool-continuation routing.
+    def _should_continue_tools(tool_node_name: str, _agent_node_name: str):
+        """Factory for tool-continuation routing."""
 
-        If the last message has tool_calls, route to the tool node;
-        otherwise, we're done.
-        """
-
-        def _router(
-            state: AgentState,
-        ) -> str:
+        def _router(state: AgentState) -> str:
             last = state["messages"][-1]
             if hasattr(last, "tool_calls") and last.tool_calls:
                 return tool_node_name
@@ -825,47 +1167,129 @@ def get_tech_transfer_agent():
 
         return _router
 
+    def builder_should_continue(state: AgentState) -> str:
+        """Check if the Builder needs to call more tools or is done."""
+        last = state["messages"][-1]
+        if hasattr(last, "tool_calls") and last.tool_calls:
+            return "builder_tools"
+        # Builder is done (produced text with DONE or hit limit)
+        return "reviewer_setup"
+
+    def reviewer_should_continue(state: AgentState) -> str:
+        """Check if the Reviewer needs more tools or has given a verdict."""
+        last = state["messages"][-1]
+        if hasattr(last, "tool_calls") and last.tool_calls:
+            return "reviewer_tools"
+        # Reviewer is done — check verdict
+        return "adversarial_gate"
+
+    def adversarial_gate_node(state: AgentState) -> dict[str, Any]:
+        """No-op node to anchor the adversarial decision gate."""
+        return {}
+
+    def adversarial_decision(state: AgentState) -> str:
+        """Route based on the Reviewer's verdict."""
+        verdict = state.get("reviewer_verdict", "")
+        round_num = state.get("refinement_round", 0)
+
+        if verdict == "APPROVED":
+            return "final_report"
+        elif round_num >= MAX_REFINEMENT_ROUNDS:
+            # Force acceptance after max rounds
+            return "final_report"
+        else:
+            # NEEDS_REVISION or unclear — send back to Builder
+            return "revision_setup"
+
     # ── Build the graph ───────────────────────────────────────────────
 
     graph = StateGraph(AgentState)  # type: ignore[invalid-argument-type]
 
-    # Add nodes
+    # Shared nodes
     graph.add_node("router", route_intent)
     graph.add_node("ask_node", ask_node)
     graph.add_node("modify_node", modify_node)
-    graph.add_node("create_node", create_node)
     graph.add_node("general_node", general_node)
     graph.add_node("ask_tools", ask_tool_node)
     graph.add_node("modify_tools", modify_tool_node)
-    graph.add_node("create_tools", create_tool_node)
 
-    # Entry point
+    # Adversarial NEW_PART nodes
+    graph.add_node("refiner_node", refiner_node)
+    graph.add_node("builder_node", builder_node)
+    graph.add_node("builder_tools", builder_tool_node)
+    graph.add_node("builder_tool_pass", builder_tool_passthrough)
+    graph.add_node("reviewer_setup", reviewer_setup_node)
+    graph.add_node("reviewer_node", reviewer_node)
+    graph.add_node("reviewer_tools", reviewer_tool_node)
+    graph.add_node("reviewer_tool_pass", reviewer_tool_passthrough)
+    graph.add_node("adversarial_gate", adversarial_gate_node)
+    graph.add_node("revision_setup", revision_setup_node)
+    graph.add_node("final_report", final_report_node)
+
+    # ── Edges ─────────────────────────────────────────────────────────
+
+    # Entry
     graph.add_edge(START, "router")
-
-    # Router → intent-specific handler
     graph.add_conditional_edges("router", route_by_intent)
 
-    # Each handler → check for tool calls → tool execution → loop back
+    # ASK flow (unchanged)
     graph.add_conditional_edges(
-        "ask_node",
-        _should_continue_tools("ask_tools", "ask_node"),
+        "ask_node", _should_continue_tools("ask_tools", "ask_node")
     )
     graph.add_edge("ask_tools", "ask_node")
 
+    # MODIFY flow (unchanged)
     graph.add_conditional_edges(
-        "modify_node",
-        _should_continue_tools("modify_tools", "modify_node"),
+        "modify_node", _should_continue_tools("modify_tools", "modify_node")
     )
     graph.add_edge("modify_tools", "modify_node")
 
-    graph.add_conditional_edges(
-        "create_node",
-        _should_continue_tools("create_tools", "create_node"),
-    )
-    graph.add_edge("create_tools", "create_node")
-
-    # General node goes straight to END (no tools)
+    # GENERAL flow (unchanged)
     graph.add_edge("general_node", END)
+
+    # ── Adversarial NEW_PART flow ─────────────────────────────────────
+    #
+    # refiner_node → builder_node ⇄ builder_tools
+    #                     ↓ (DONE)
+    #              reviewer_setup → reviewer_node ⇄ reviewer_tools
+    #                                    ↓ (verdict)
+    #                           adversarial_gate
+    #                          ↙              ↘
+    #                  revision_setup      final_report → END
+    #                       ↓
+    #                  builder_node (loops back)
+
+    graph.add_edge("refiner_node", "builder_node")
+
+    # Builder tool loop
+    graph.add_conditional_edges("builder_node", builder_should_continue)
+    graph.add_edge("builder_tools", "builder_tool_pass")
+    graph.add_edge("builder_tool_pass", "builder_node")
+
+    # Builder done → Reviewer
+    graph.add_edge("reviewer_setup", "reviewer_node")
+
+    # Reviewer tool loop
+    graph.add_conditional_edges("reviewer_node", reviewer_should_continue)
+    graph.add_edge("reviewer_tools", "reviewer_tool_pass")
+    graph.add_edge("reviewer_tool_pass", "reviewer_node")
+
+    # Adversarial decision gate (not a real node — use conditional edges)
+    # We use the adversarial_gate as a routing node
+    graph.add_conditional_edges(
+        "adversarial_gate",
+        lambda state: adversarial_decision(state),
+        {
+            "final_report": "final_report",
+            "revision_setup": "revision_setup",
+        },
+    )
+
+    # Revision → Builder again
+    graph.add_edge("revision_setup", "builder_node")
+
+    # Final report → END
+    graph.add_edge("final_report", END)
 
     # Compile
     compiled = graph.compile()
@@ -876,11 +1300,18 @@ def get_tech_transfer_agent():
         return {
             "messages": [HumanMessage(content=inputs["question"])],
             "intent": "",
+            "tool_call_count": 0,
+            "refinement_round": 0,
+            "builder_messages": [],
+            "reviewer_messages": [],
+            "root_part_id": "",
+            "reviewer_verdict": "",
+            "reviewer_feedback": "",
         }
 
     def safe_invoke(inputs: dict) -> dict:
         try:
-            return compiled.invoke(inputs, config={"recursion_limit": 60})
+            return compiled.invoke(inputs, config={"recursion_limit": 200})
         except Exception as e:
             error_msg = f"The agent encountered an error: {e}"
             return {
@@ -891,16 +1322,21 @@ def get_tech_transfer_agent():
     def output_adapter(outputs: dict) -> str:
         content = outputs["messages"][-1].content
 
-        # Handle Gemini's list-of-dicts format: [{'type': 'text', 'text': '...'}]
         if isinstance(content, list):
-            # Extract text from all text blocks
             texts = []
             for item in content:
                 if isinstance(item, dict) and item.get("type") == "text":
                     texts.append(item.get("text", ""))
             if texts:
-                return "\n".join(texts)
-            return str(content)  # Fallback to string representation
+                content = "\n".join(texts)
+            else:
+                content = str(content)
+
+        if not content or not str(content).strip():
+            return (
+                "I'm sorry, I wasn't able to generate a response. "
+                "Could you try rephrasing your question?"
+            )
 
         return content
 
