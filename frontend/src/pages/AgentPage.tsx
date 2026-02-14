@@ -1,16 +1,20 @@
 import { useState, useRef, useEffect } from "react";
 import { DefaultService } from "../api";
+import { Paperclip, Send, X, FileText, Image } from "lucide-react";
 
 interface Message {
   role: "user" | "assistant";
   content: string;
+  fileName?: string;
 }
 
 export default function AgentPage() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [attachedFile, setAttachedFile] = useState<File | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -18,16 +22,31 @@ export default function AgentPage() {
 
   const handleSend = async () => {
     const text = input.trim();
-    if (!text || loading) return;
+    if ((!text && !attachedFile) || loading) return;
+
+    const userMessage: Message = {
+      role: "user",
+      content: text || (attachedFile ? `Uploaded: ${attachedFile.name}` : ""),
+      fileName: attachedFile?.name,
+    };
 
     setInput("");
-    setMessages((prev) => [...prev, { role: "user", content: text }]);
+    const fileToSend = attachedFile;
+    setAttachedFile(null);
+    setMessages((prev) => [...prev, userMessage]);
     setLoading(true);
 
     try {
-      const res = await DefaultService.chatAgentAgentChatPost(text);
+      const formData: Record<string, any> = {};
+      if (text) formData.message = text;
+      if (fileToSend) formData.file = fileToSend;
+      const res = await DefaultService.chatAgentAgentChatPost(formData);
       const content =
-        typeof res === "string" ? res : JSON.stringify(res, null, 2);
+        typeof res === "string"
+          ? res
+          : typeof res?.response === "string"
+            ? res.response
+            : JSON.stringify(res, null, 2);
       setMessages((prev) => [...prev, { role: "assistant", content }]);
     } catch {
       setMessages((prev) => [
@@ -46,6 +65,20 @@ export default function AgentPage() {
     }
   };
 
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) setAttachedFile(file);
+    e.target.value = "";
+  };
+
+  const getFileIcon = (name: string) => {
+    const ext = name.split(".").pop()?.toLowerCase();
+    if (ext === "pdf") return <FileText className="h-4 w-4" />;
+    if (["png", "jpg", "jpeg", "gif", "webp"].includes(ext || ""))
+      return <Image className="h-4 w-4" />;
+    return <FileText className="h-4 w-4" />;
+  };
+
   return (
     <div className="flex h-[calc(100vh-4rem)] flex-col p-6">
       <div className="mb-4">
@@ -53,16 +86,31 @@ export default function AgentPage() {
           Manufacturing Assistant
         </h1>
         <p className="mt-1 text-text-secondary">
-          Chat with the tech transfer agent.
+          Chat with the tech transfer agent. Attach PDFs or images for
+          multimodal analysis.
         </p>
       </div>
 
       <div className="flex-1 overflow-y-auto rounded-md border border-border bg-surface-light p-4 space-y-3">
         {messages.length === 0 && (
-          <div className="flex h-full items-center justify-center">
+          <div className="flex h-full flex-col items-center justify-center gap-4">
             <p className="text-text-muted text-sm">
               Send a message to start the conversation.
             </p>
+            <div className="flex flex-wrap gap-2 justify-center">
+              <span className="rounded-full border border-border px-3 py-1 text-xs text-text-muted">
+                PDF analysis
+              </span>
+              <span className="rounded-full border border-border px-3 py-1 text-xs text-text-muted">
+                Image recognition
+              </span>
+              <span className="rounded-full border border-border px-3 py-1 text-xs text-text-muted">
+                BOM extraction
+              </span>
+              <span className="rounded-full border border-border px-3 py-1 text-xs text-text-muted">
+                Manufacturing queries
+              </span>
+            </div>
           </div>
         )}
 
@@ -78,6 +126,12 @@ export default function AgentPage() {
                   : "bg-surface text-text-secondary"
               }`}
             >
+              {msg.fileName && (
+                <div className="mb-2 flex items-center gap-2 rounded border border-border bg-surface-lighter px-2 py-1 text-xs text-text-muted">
+                  {getFileIcon(msg.fileName)}
+                  {msg.fileName}
+                </div>
+              )}
               <pre className="whitespace-pre-wrap break-words font-sans">
                 {msg.content}
               </pre>
@@ -99,7 +153,39 @@ export default function AgentPage() {
         <div ref={bottomRef} />
       </div>
 
-      <div className="mt-4 flex gap-3">
+      {attachedFile && (
+        <div className="mt-2 flex items-center gap-2 rounded-md border border-border bg-surface-light px-3 py-2">
+          {getFileIcon(attachedFile.name)}
+          <span className="flex-1 truncate text-sm text-text-secondary">
+            {attachedFile.name}
+          </span>
+          <span className="text-xs text-text-muted">
+            {(attachedFile.size / 1024).toFixed(1)} KB
+          </span>
+          <button
+            onClick={() => setAttachedFile(null)}
+            className="rounded p-1 text-text-muted hover:bg-surface-lighter hover:text-text-primary"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      )}
+
+      <div className="mt-3 flex gap-3">
+        <input
+          type="file"
+          ref={fileInputRef}
+          onChange={handleFileSelect}
+          accept=".pdf,.png,.jpg,.jpeg,.gif,.webp,.csv,.txt,.json,.xlsx"
+          className="hidden"
+        />
+        <button
+          onClick={() => fileInputRef.current?.click()}
+          className="rounded-md border border-border bg-surface-light p-2.5 text-text-muted transition-colors hover:border-primary hover:text-primary"
+          title="Attach file"
+        >
+          <Paperclip className="h-5 w-5" />
+        </button>
         <input
           type="text"
           placeholder="Ask about your manufacturing data..."
@@ -110,10 +196,10 @@ export default function AgentPage() {
         />
         <button
           onClick={handleSend}
-          disabled={loading || !input.trim()}
+          disabled={loading || (!input.trim() && !attachedFile)}
           className="rounded-md bg-primary px-6 py-2.5 font-mono text-sm font-medium uppercase tracking-wider text-white transition-colors hover:bg-primary/90 disabled:opacity-50"
         >
-          Send
+          <Send className="h-5 w-5" />
         </button>
       </div>
     </div>

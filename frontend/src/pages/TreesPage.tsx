@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { DefaultService } from "../api";
+import { DefaultService, OpenAPI } from "../api";
+import { Download, FileText } from "lucide-react";
 
 const NODE_TYPE_COLORS: Record<string, string> = {
   part: "#1E40AF",
@@ -24,6 +25,43 @@ export default function TreesPage() {
     enabled: !!selectedRoot,
   });
 
+  const handleExportBom = async (partId: string) => {
+    const base = OpenAPI.BASE || "";
+    const token = typeof OpenAPI.TOKEN === "string" ? OpenAPI.TOKEN : "";
+    const res = await fetch(`${base}/trees/${partId}/export/bom`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) return;
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    const disposition = res.headers.get("content-disposition");
+    const filename = disposition?.match(/filename="?(.+?)"?$/)?.[1] || "bom.csv";
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleExportWorkInstructions = async (partId: string) => {
+    const base = OpenAPI.BASE || "";
+    const token = typeof OpenAPI.TOKEN === "string" ? OpenAPI.TOKEN : "";
+    const res = await fetch(`${base}/trees/${partId}/export/work-instructions`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) return;
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    const disposition = res.headers.get("content-disposition");
+    const filename =
+      disposition?.match(/filename="?(.+?)"?$/)?.[1] || "work_instructions.md";
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div className="p-6 space-y-6">
       <div>
@@ -31,7 +69,8 @@ export default function TreesPage() {
           Manufacturing Trees
         </h1>
         <p className="mt-1 text-text-secondary">
-          Visualize manufacturing tree structures.
+          Visualize manufacturing tree structures and export as BOM or work
+          instructions.
         </p>
       </div>
 
@@ -75,6 +114,28 @@ export default function TreesPage() {
 
           {selectedRoot && (
             <div className="rounded-md border border-border bg-surface-light p-6">
+              <div className="mb-4 flex items-center justify-between">
+                <h2 className="font-mono text-lg font-semibold uppercase tracking-wider text-text-primary">
+                  Tree Structure
+                </h2>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => handleExportBom(selectedRoot)}
+                    className="flex items-center gap-2 rounded-md border border-border bg-surface px-3 py-2 text-sm text-text-secondary transition-colors hover:border-primary hover:text-primary"
+                  >
+                    <Download className="h-4 w-4" />
+                    Export BOM
+                  </button>
+                  <button
+                    onClick={() => handleExportWorkInstructions(selectedRoot)}
+                    className="flex items-center gap-2 rounded-md border border-border bg-surface px-3 py-2 text-sm text-text-secondary transition-colors hover:border-primary hover:text-primary"
+                  >
+                    <FileText className="h-4 w-4" />
+                    Work Instructions
+                  </button>
+                </div>
+              </div>
+
               {treeLoading ? (
                 <div className="flex items-center justify-center py-10">
                   <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
@@ -92,11 +153,18 @@ export default function TreesPage() {
   );
 }
 
-function TreeNode({ node, depth }: { node: Record<string, any>; depth: number }) {
+function TreeNode({
+  node,
+  depth,
+}: {
+  node: Record<string, any>;
+  depth: number;
+}) {
   const [collapsed, setCollapsed] = useState(depth > 1);
   const children = node.children as Record<string, any>[] | undefined;
   const hasChildren = children && children.length > 0;
-  const typeColor = NODE_TYPE_COLORS[node.type?.toLowerCase?.()] || "#71717A";
+  const typeColor =
+    NODE_TYPE_COLORS[node.type?.toLowerCase?.()] || "#71717A";
 
   return (
     <div style={{ marginLeft: depth * 20 }}>

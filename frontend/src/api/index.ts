@@ -9,6 +9,7 @@ export type { OpenAPIConfig } from './core/OpenAPI';
 
 export type { ApiKeyCreate } from './models/ApiKeyCreate';
 export type { ApiKeyRead } from './models/ApiKeyRead';
+export type { Body_chat_agent_agent_chat_post } from './models/Body_chat_agent_agent_chat_post';
 export type { Body_ingest_bom_ingest_bom_post } from './models/Body_ingest_bom_ingest_bom_post';
 export type { HTTPValidationError } from './models/HTTPValidationError';
 export { NodeStatus } from './models/NodeStatus';

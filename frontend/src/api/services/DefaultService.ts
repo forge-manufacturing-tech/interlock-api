@@ -2,6 +2,7 @@
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
+import type { Body_chat_agent_agent_chat_post } from '../models/Body_chat_agent_agent_chat_post';
 import type { Body_ingest_bom_ingest_bom_post } from '../models/Body_ingest_bom_ingest_bom_post';
 import type { PartNode } from '../models/PartNode';
 import type { CancelablePromise } from '../core/CancelablePromise';
@@ -41,19 +42,60 @@ export class DefaultService {
     /**
      * Chat Agent
      * Chat with the tech transfer agent.
-     * The agent can inspect and modify the manufacturing graph.
-     * @param message
+     * Supports optional file attachments (PDF, images).
+     * @param formData
      * @returns any Successful Response
      * @throws ApiError
      */
     public static chatAgentAgentChatPost(
-        message: string,
+        formData?: Body_chat_agent_agent_chat_post,
     ): CancelablePromise<any> {
         return __request(OpenAPI, {
             method: 'POST',
             url: '/agent/chat',
-            query: {
-                'message': message,
+            formData: formData,
+            mediaType: 'multipart/form-data',
+            errors: {
+                422: `Validation Error`,
+            },
+        });
+    }
+    /**
+     * Export Tree As Bom
+     * Export a manufacturing tree as a CSV Bill of Materials.
+     * @param partId
+     * @returns any Successful Response
+     * @throws ApiError
+     */
+    public static exportTreeAsBomTreesPartIdExportBomGet(
+        partId: string,
+    ): CancelablePromise<any> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/trees/{part_id}/export/bom',
+            path: {
+                'part_id': partId,
+            },
+            errors: {
+                422: `Validation Error`,
+            },
+        });
+    }
+    /**
+     * Export Tree As Work Instructions
+     * Export a manufacturing tree as markdown work instructions.
+     * @param partId
+     * @returns any Successful Response
+     * @throws ApiError
+     */
+    public static exportTreeAsWorkInstructionsTreesPartIdExportWorkInstructionsGet(
+        partId: string,
+    ): CancelablePromise<any> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/trees/{part_id}/export/work-instructions',
+            path: {
+                'part_id': partId,
             },
             errors: {
                 422: `Validation Error`,

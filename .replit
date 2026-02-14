@@ -5,7 +5,7 @@ integrations = ["python_openai_ai_integrations:1.0.0"]
 
 [nix]
 channel = "stable-25_05"
-packages = ["graphviz"]
+packages = ["freetype", "graphviz", "gumbo", "harfbuzz", "jbig2dec", "libjpeg_turbo", "mupdf", "openjpeg", "swig", "xcbuild"]
 
 [userenv]
 
