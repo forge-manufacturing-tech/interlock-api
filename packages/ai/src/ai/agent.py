@@ -764,22 +764,28 @@ REVIEWER FEEDBACK:
 
 
 def _get_llm():
-    from langchain_google_genai import ChatGoogleGenerativeAI
+    from langchain_openai import ChatOpenAI
 
-    return ChatGoogleGenerativeAI(
-        model="gemini-3-flash-preview",
+    # the newest OpenAI model is "gpt-5" which was released August 7, 2025.
+    # do not change this unless explicitly requested by the user
+    return ChatOpenAI(
+        model="gpt-5-mini",
         temperature=0.3,
-        api_key=os.getenv("GEMINI_API_KEY"),
+        api_key=os.getenv("AI_INTEGRATIONS_OPENAI_API_KEY"),
+        base_url=os.getenv("AI_INTEGRATIONS_OPENAI_BASE_URL"),
     )
 
 
 def _get_strong_llm():
-    from langchain_google_genai import ChatGoogleGenerativeAI
+    from langchain_openai import ChatOpenAI
 
-    return ChatGoogleGenerativeAI(
-        model="gemini-3-pro-preview",
+    # the newest OpenAI model is "gpt-5" which was released August 7, 2025.
+    # do not change this unless explicitly requested by the user
+    return ChatOpenAI(
+        model="gpt-5",
         temperature=0.3,
-        api_key=os.getenv("GEMINI_API_KEY"),
+        api_key=os.getenv("AI_INTEGRATIONS_OPENAI_API_KEY"),
+        base_url=os.getenv("AI_INTEGRATIONS_OPENAI_BASE_URL"),
     )
 
 

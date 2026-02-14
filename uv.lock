@@ -617,6 +617,7 @@ name = "interlock-api"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
+    { name = "openai" },
     { name = "scalar-fastapi" },
 ]
 
@@ -634,7 +635,10 @@ dev = [
 ]
 
 [package.metadata]
-requires-dist = [{ name = "scalar-fastapi", specifier = ">=1.6.1" }]
+requires-dist = [
+    { name = "openai", specifier = ">=2.17.0" },
+    { name = "scalar-fastapi", specifier = ">=1.6.1" },
+]
 
 [package.metadata.requires-dev]
 dev = [

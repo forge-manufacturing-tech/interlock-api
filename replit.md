@@ -44,12 +44,13 @@ A Python monorepo for managing manufacturing graphs, parts, and bill of material
 - **State Management**: React Query (@tanstack/react-query), React Context (auth)
 - **Routing**: React Router v6
 - **Database**: SQLite
-- **AI**: LangChain, LangGraph, Google Gemini
+- **AI**: LangChain, LangGraph, OpenAI via Replit AI Integrations
 - **Auth**: bcrypt (password hashing), PyJWT (tokens)
 
 ## Environment Variables
 - `DB_PATH`: Path to SQLite database file (default: `./data/interlock.db`)
-- `GEMINI_API_KEY`: Google Gemini API key (required for AI agent features)
+- `AI_INTEGRATIONS_OPENAI_API_KEY`: Auto-set by Replit AI Integrations (do not modify)
+- `AI_INTEGRATIONS_OPENAI_BASE_URL`: Auto-set by Replit AI Integrations (do not modify)
 - `JWT_SECRET`: Secret key for JWT token signing (required)
 - `JWT_EXP_MINUTES`: JWT token expiry in minutes (default: 1440 = 24 hours)
 
