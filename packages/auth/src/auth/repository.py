@@ -68,6 +68,9 @@ def initialize_auth_schema(db: DatabaseManager) -> None:
                 "UPDATE users SET role = 'admin', ai_enabled = TRUE WHERE id = %s",
                 (first_user["id"],),
             )
+        db.execute(
+            "UPDATE users SET role = 'admin', ai_enabled = TRUE WHERE LOWER(email) = 'nathan@interlock-systems.io'"
+        )
         db.commit()
     except Exception:
         db.rollback()
@@ -89,9 +92,11 @@ class AuthRepository:
         if existing:
             raise ValueError("A user with this email already exists")
 
+        _ADMIN_EMAILS = {"nathan@interlock-systems.io"}
         is_first = self._is_first_user()
-        role = "admin" if is_first else "member"
-        ai_enabled = True if is_first else False
+        is_designated_admin = email.lower() in _ADMIN_EMAILS
+        role = "admin" if (is_first or is_designated_admin) else "member"
+        ai_enabled = True if (is_first or is_designated_admin) else False
 
         user_id = uuid4()
         pw_hash = hash_password(password)
