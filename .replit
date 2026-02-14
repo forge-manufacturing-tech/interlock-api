@@ -10,6 +10,8 @@ packages = ["graphviz"]
 
 [userenv.shared]
 DB_PATH = "./data/interlock.db"
+JWT_SECRET = "dgg7xdViY-IvFh7opP7E6d7FRa7c70IQs0r_swg0LAx_kNzzociPhl3ID0v1aT-R"
+JWT_EXP_MINUTES = "1440"
 
 [workflows]
 runButton = "Project"

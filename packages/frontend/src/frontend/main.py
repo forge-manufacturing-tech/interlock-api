@@ -6,13 +6,17 @@ import streamlit as st
 from frontend.api import (
     chat_agent,
     check_health,
+    create_api_key,
     get_part_details,
     get_tree_structure,
     get_trees,
     ingest_bom,
+    list_api_keys,
+    login,
+    revoke_api_key,
+    signup,
 )
 
-# Page config
 st.set_page_config(
     page_title="Interlock Manufacturing",
     page_icon="🏭",
@@ -20,29 +24,24 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# Custom CSS for modern aesthetic
 st.markdown(
     """
     <style>
-        /* Import font */
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
 
-        /* Base Styles */
         html, body, [class*="css"] {
             font-family: 'Inter', sans-serif;
         }
 
         .stApp {
-            background-color: #0F172A; /* Slate 900 */
+            background-color: #0F172A;
         }
 
-        /* Sidebar Styling */
         section[data-testid="stSidebar"] {
-            background-color: #1E293B; /* Slate 800 */
+            background-color: #1E293B;
             border-right: 1px solid #334155;
         }
 
-        /* Glassmorphism Card Effect */
         .glass-card {
             background: rgba(30, 41, 59, 0.7);
             backdrop-filter: blur(12px);
@@ -55,7 +54,6 @@ st.markdown(
             margin-bottom: 24px;
         }
 
-        /* Typography */
         h1 {
             background: linear-gradient(135deg, #60A5FA 0%, #A78BFA 100%);
             -webkit-background-clip: text;
@@ -72,7 +70,6 @@ st.markdown(
             color: #CBD5E1;
         }
 
-        /* Custom Button */
         .stButton > button {
             background: linear-gradient(to right, #3B82F6, #8B5CF6);
             color: white;
@@ -89,14 +86,12 @@ st.markdown(
             box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
         }
 
-        /* Dataframe styling */
         .stDataFrame {
             border: 1px solid #334155;
             border-radius: 8px;
             overflow: hidden;
         }
 
-        /* Status Indicators */
         .status-dot {
             height: 10px;
             width: 10px;
@@ -120,31 +115,102 @@ st.markdown(
 )
 
 
-# Helper for displaying JSON
+def get_token() -> str | None:
+    return st.session_state.get("token")
+
+
+def show_auth_page():
+    st.title("Welcome to Interlock")
+    st.markdown("Sign in or create an account to get started.")
+
+    tab_login, tab_signup = st.tabs(["Sign In", "Create Account"])
+
+    with tab_login:
+        with st.form("login_form"):
+            email = st.text_input("Email", key="login_email")
+            password = st.text_input("Password", type="password", key="login_password")
+            submitted = st.form_submit_button("Sign In", type="primary")
+
+            if submitted:
+                if not email or not password:
+                    st.error("Please fill in all fields.")
+                else:
+                    result = login(email, password)
+                    if "error" in result:
+                        st.error(result["error"])
+                    else:
+                        st.session_state.token = result["access_token"]
+                        st.session_state.user = result["user"]
+                        st.rerun()
+
+    with tab_signup:
+        with st.form("signup_form"):
+            name = st.text_input("Name (optional)", key="signup_name")
+            email = st.text_input("Email", key="signup_email")
+            password = st.text_input("Password", type="password", key="signup_password")
+            password_confirm = st.text_input("Confirm Password", type="password", key="signup_password_confirm")
+            submitted = st.form_submit_button("Create Account", type="primary")
+
+            if submitted:
+                if not email or not password:
+                    st.error("Please fill in email and password.")
+                elif password != password_confirm:
+                    st.error("Passwords do not match.")
+                elif len(password) < 6:
+                    st.error("Password must be at least 6 characters.")
+                else:
+                    result = signup(email, password, name if name else None)
+                    if "error" in result:
+                        st.error(result["error"])
+                    else:
+                        st.session_state.token = result["access_token"]
+                        st.session_state.user = result["user"]
+                        st.rerun()
+
+
+if "token" not in st.session_state:
+    st.session_state.token = None
+    st.session_state.user = None
+
+if not st.session_state.token:
+    show_auth_page()
+    st.stop()
+
+token = get_token()
+
+
 def display_json_collapsible(data, label="Details"):
     with st.expander(label):
         st.json(data)
 
 
-# --- Sidebar ---
 with st.sidebar:
     st.image(
         "https://img.icons8.com/fluency/96/infrastructure.png", width=64
-    )  # Placeholder logo
+    )
     st.title("Interlock")
     st.caption("Manufacturing Graph Intelligence")
 
     st.markdown("---")
 
+    user = st.session_state.get("user", {})
+    user_display = user.get("name") or user.get("email", "User")
+    st.markdown(f"Signed in as **{user_display}**")
+    if st.button("Sign Out"):
+        st.session_state.token = None
+        st.session_state.user = None
+        st.rerun()
+
+    st.markdown("---")
+
     nav_option = st.radio(
         "Navigation",
-        ["🤖 Agent Chat", "📊 Parts Explorer", "🌳 Tree Visualizer", "📥 BOM Ingest"],
+        ["🤖 Agent Chat", "📊 Parts Explorer", "🌳 Tree Visualizer", "📥 BOM Ingest", "🔑 API Keys"],
         label_visibility="collapsed",
     )
 
     st.markdown("---")
 
-    # System Status
     is_online = check_health()
     status_class = "status-online" if is_online else "status-offline"
     status_text = "System Online" if is_online else "System Offline"
@@ -172,46 +238,32 @@ with st.sidebar:
     if not is_online:
         st.error("Cannot connect to API at http://127.0.0.1:8000")
 
-# --- Main Content ---
-
 if nav_option == "🤖 Agent Chat":
     st.title("Manufacturing Assistant")
     st.markdown("Ask questions about your manufacturing graph, parts, or processes.")
 
-    # Chat history
     if "messages" not in st.session_state:
         st.session_state.messages = []
 
-    # Display chat messages
     for message in st.session_state.messages:
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
 
-    # Chat input
     if prompt := st.chat_input("How can I help you today?"):
-        # Add user message to history
         st.session_state.messages.append({"role": "user", "content": prompt})
         with st.chat_message("user"):
             st.markdown(prompt)
 
-        # Get response from API
         with st.spinner("Thinking..."):
-            response_data = chat_agent(prompt)
+            response_data = chat_agent(prompt, token)
 
-            # Simple handling of response - depends on actual API return structure
-            # If the response has 'response' key or similar
             if "error" in response_data:
                 bot_reply = f"Error: {response_data['error']}"
             else:
-                # Assuming the API returns something like {"response": "..."}
-                # or just a json dump if structure is unknown
                 bot_reply = str(response_data)
-                # Pretty print if it's a dict
                 if isinstance(response_data, dict):
-                    # Try to clean it up if possible
                     bot_reply = json.dumps(response_data, indent=2)
 
-        # Add assistant response to history
         st.session_state.messages.append({"role": "assistant", "content": bot_reply})
         with st.chat_message("assistant"):
             st.markdown(
@@ -230,17 +282,14 @@ elif nav_option == "📊 Parts Explorer":
         if st.button("🔄 Refresh Data"):
             st.rerun()
 
-    # Fetch parts
     with st.spinner("Loading parts..."):
-        parts_data = get_trees()
+        parts_data = get_trees(token)
 
     if parts_data:
         df = pd.DataFrame(parts_data)
 
-        # Data Grid
         st.markdown('<div class="glass-card">', unsafe_allow_html=True)
 
-        # Search filter
         search_term = st.text_input(
             "Search parts...", placeholder="Filter by name or ID"
         )
@@ -275,14 +324,13 @@ elif nav_option == "📊 Parts Explorer":
         )
         st.markdown("</div>", unsafe_allow_html=True)
 
-        # Drill down details (optional interaction)
         st.markdown("### Part Details")
         selected_part_id = st.text_input(
             "Enter Part ID for deep dive", placeholder="UUID..."
         )
         if selected_part_id:
             with st.spinner(f"Fetching details for {selected_part_id}..."):
-                details = get_part_details(selected_part_id)
+                details = get_part_details(selected_part_id, token)
                 if details:
                     st.success("Part Found")
                     st.json(details)
@@ -298,9 +346,8 @@ elif nav_option == "🌳 Tree Visualizer":
         "Visualize the end-to-end manufacturing hierarchy for each distinct product."
     )
 
-    # Fetch root parts (distinct trees)
     with st.spinner("Loading trees..."):
-        roots = get_trees()
+        roots = get_trees(token)
 
     if not roots:
         st.info(
@@ -312,7 +359,6 @@ elif nav_option == "🌳 Tree Visualizer":
             options=[f"{r['name']} ({r['id'][:8]})" for r in roots],
         )
 
-        # Get original root ID
         selected_root_id = next(
             r["id"]
             for r in roots
@@ -320,17 +366,15 @@ elif nav_option == "🌳 Tree Visualizer":
         )
 
         with st.spinner("Building visualization..."):
-            tree_data = get_tree_structure(selected_root_id)
+            tree_data = get_tree_structure(selected_root_id, token)
 
             if tree_data:
-                # We can use graphviz for a nice visual
                 import graphviz
 
                 dot = graphviz.Digraph(comment="Manufacturing Tree")
                 dot.attr(bgcolor="transparent")
-                dot.attr(rankdir="TB")  # Top to Bottom
+                dot.attr(rankdir="TB")
 
-                # Node styles
                 dot.attr(
                     "node",
                     shape="box",
@@ -344,17 +388,16 @@ elif nav_option == "🌳 Tree Visualizer":
                     label = node["name"]
                     ntype = node["type"]
 
-                    # Styling based on type
-                    color = "#3B82F6"  # Default blue
+                    color = "#3B82F6"
                     fontcolor = "white"
 
                     if ntype == "part":
-                        color = "#1E40AF"  # Dark blue
+                        color = "#1E40AF"
                         uc = node.get("unit_cost")
                         cost_str = f"\n${uc:,.2f}" if uc is not None else ""
                         label = f"{label}\n(Part){cost_str}"
                     elif ntype == "operation":
-                        color = "#8B5CF6"  # Purple
+                        color = "#8B5CF6"
                         label = f"{label}\n({node.get('op_type', 'OP')})"
                         shape = "ellipse"
                         dot.node(
@@ -365,25 +408,24 @@ elif nav_option == "🌳 Tree Visualizer":
                             shape=shape,
                         )
                     elif ntype == "currency":
-                        color = "#10B981"  # Green
+                        color = "#10B981"
                         label = (
                             f"{label}\n{node.get('quantity', 0)} {node.get('unit', '')}"
                         )
                     elif ntype == "labor":
-                        color = "#F59E0B"  # Amber
+                        color = "#F59E0B"
                         label = (
                             f"{label}\n{node.get('quantity', 0)} {node.get('unit', '')}"
                         )
                     elif ntype == "tool":
-                        color = "#6366F1"  # Indigo
+                        color = "#6366F1"
                         label = (
                             f"{label}\n{node.get('quantity', 0)} {node.get('unit', '')}"
                         )
 
                     if ntype != "operation":
-                        # Add quantity info to label if it's an input
                         if "quantity" in node and ntype != "part":
-                            pass  # Already added above
+                            pass
 
                         dot.node(node_id, label, fillcolor=color, fontcolor=fontcolor)
 
@@ -393,20 +435,16 @@ elif nav_option == "🌳 Tree Visualizer":
                     for child in node.get("children", []):
                         add_to_graph(child, node_id)
 
-                    # Special case: Tools can have a linked part definition
                     if "linked_part" in node:
                         linked = node["linked_part"]
-                        # We can visualize this as a child of the tool
                         add_to_graph(linked, node_id)
 
-                # Build the graph
                 add_to_graph(tree_data)
 
                 st.markdown('<div class="glass-card">', unsafe_allow_html=True)
                 st.graphviz_chart(dot, width="stretch")
                 st.markdown("</div>", unsafe_allow_html=True)
 
-                # Raw data view
                 with st.expander("View Raw Tree Data"):
                     st.json(tree_data)
             else:
@@ -428,7 +466,7 @@ elif nav_option == "📥 BOM Ingest":
 
         if st.button("🚀 Process Ingestion", type="primary"):
             with st.spinner("Ingesting BOM..."):
-                result = ingest_bom(uploaded_file)
+                result = ingest_bom(uploaded_file, token)
 
                 if "error" in result:
                     st.error(f"Ingestion Failed: {result['error']}")
@@ -439,7 +477,53 @@ elif nav_option == "📥 BOM Ingest":
 
     st.markdown("</div>", unsafe_allow_html=True)
 
-# Footer
+elif nav_option == "🔑 API Keys":
+    st.title("API Key Management")
+    st.markdown("Create and manage API keys for programmatic access to the Interlock API.")
+
+    st.markdown('<div class="glass-card">', unsafe_allow_html=True)
+    st.markdown("### Create New API Key")
+    with st.form("create_api_key_form"):
+        key_name = st.text_input("Key Name", placeholder="e.g. Production Server")
+        submitted = st.form_submit_button("Generate API Key", type="primary")
+
+        if submitted:
+            if not key_name:
+                st.error("Please provide a name for the API key.")
+            else:
+                result = create_api_key(token, key_name)
+                if "error" in result:
+                    st.error(result["error"])
+                else:
+                    st.success("API key created successfully!")
+                    st.warning("Copy this key now. You won't be able to see it again.")
+                    st.code(result["key"], language=None)
+    st.markdown("</div>", unsafe_allow_html=True)
+
+    st.markdown("### Your API Keys")
+    st.markdown("Use these keys in the `x-api-key` header for programmatic API access.")
+
+    keys = list_api_keys(token)
+    if keys:
+        for key_info in keys:
+            col1, col2, col3 = st.columns([3, 2, 1])
+            with col1:
+                status_emoji = "🟢" if not key_info.get("revoked_at") else "🔴"
+                st.markdown(f"{status_emoji} **{key_info['name']}** (****{key_info['last4']})")
+            with col2:
+                st.caption(f"Created: {key_info['created_at'][:10]}")
+                if key_info.get("last_used_at"):
+                    st.caption(f"Last used: {key_info['last_used_at'][:10]}")
+            with col3:
+                if not key_info.get("revoked_at"):
+                    if st.button("Revoke", key=f"revoke_{key_info['id']}"):
+                        revoke_api_key(token, str(key_info["id"]))
+                        st.rerun()
+                else:
+                    st.caption("Revoked")
+    else:
+        st.info("No API keys yet. Create one above to get started.")
+
 st.markdown(
     """
     <div style="

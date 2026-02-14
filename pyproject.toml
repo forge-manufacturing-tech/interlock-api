@@ -25,6 +25,7 @@ dev = [
     "database",
     "orm",
     "frontend",
+    "auth",
 ]
 
 [tool.uv.sources]
@@ -36,6 +37,7 @@ deploy-gcp = { workspace = true }
 database = { workspace = true }
 orm = { workspace = true }
 frontend = { workspace = true }
+auth = { workspace = true }
 
 [tool.ruff]
 target-version = "py312"
