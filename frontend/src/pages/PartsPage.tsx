@@ -1,23 +1,42 @@
-import { useState, Fragment } from "react";
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { DefaultService } from "../api";
+import { ChevronRight, ChevronDown, Search } from "lucide-react";
 
 export default function PartsPage() {
   const [search, setSearch] = useState("");
-  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [expandedTrees, setExpandedTrees] = useState<Set<string>>(new Set());
 
-  const { data: parts, isLoading } = useQuery({
-    queryKey: ["parts"],
-    queryFn: () => DefaultService.readPartsPartsGet(),
+  const { data: roots, isLoading: rootsLoading } = useQuery({
+    queryKey: ["trees"],
+    queryFn: () => DefaultService.readTreesTreesGet(),
   });
 
-  const filtered = parts?.filter((p) => {
+  const toggleTree = (id: string) => {
+    setExpandedTrees((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const expandAll = () => {
+    if (roots) {
+      setExpandedTrees(new Set(roots.map((r) => r.id).filter(Boolean) as string[]));
+    }
+  };
+
+  const collapseAll = () => {
+    setExpandedTrees(new Set());
+  };
+
+  const filteredRoots = roots?.filter((r) => {
+    if (!search) return true;
     const q = search.toLowerCase();
     return (
-      !q ||
-      p.name?.toLowerCase().includes(q) ||
-      p.description?.toLowerCase().includes(q) ||
-      p.status?.toLowerCase().includes(q)
+      r.name?.toLowerCase().includes(q) ||
+      r.description?.toLowerCase().includes(q)
     );
   });
 
@@ -28,82 +47,205 @@ export default function PartsPage() {
           Parts Explorer
         </h1>
         <p className="mt-1 text-text-secondary">
-          Browse and manage manufacturing parts.
+          Manufacturing parts organized by product tree.
         </p>
       </div>
 
-      <input
-        type="text"
-        placeholder="Search parts by name, description, or status..."
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
-        className="w-full max-w-md rounded-md border border-border bg-surface px-4 py-2.5 text-text-primary placeholder-text-muted outline-none focus:border-primary"
-      />
+      <div className="flex items-center gap-3">
+        <div className="relative flex-1 max-w-md">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-text-muted" />
+          <input
+            type="text"
+            placeholder="Search trees..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-full rounded-md border border-border bg-surface pl-10 pr-4 py-2.5 text-text-primary placeholder-text-muted outline-none focus:border-primary"
+          />
+        </div>
+        <button
+          onClick={expandAll}
+          className="rounded-md border border-border bg-surface px-3 py-2 text-sm text-text-secondary hover:border-primary hover:text-primary transition-colors"
+        >
+          Expand All
+        </button>
+        <button
+          onClick={collapseAll}
+          className="rounded-md border border-border bg-surface px-3 py-2 text-sm text-text-secondary hover:border-primary hover:text-primary transition-colors"
+        >
+          Collapse All
+        </button>
+      </div>
 
-      {isLoading ? (
+      {rootsLoading ? (
         <div className="flex items-center justify-center py-20">
           <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
         </div>
-      ) : !filtered || filtered.length === 0 ? (
+      ) : !filteredRoots || filteredRoots.length === 0 ? (
         <div className="rounded-md border border-border bg-surface-light p-12 text-center">
           <p className="text-text-muted">
-            No parts found. Use the BOM Ingest to add parts.
+            No manufacturing trees found. Use the BOM Ingest or Agent Chat to create parts.
           </p>
         </div>
       ) : (
-        <div className="overflow-x-auto rounded-md border border-border">
-          <table className="w-full divide-y divide-border">
-            <thead>
-              <tr className="bg-surface-light">
-                <th className="px-4 py-3 text-left text-xs font-mono uppercase tracking-wider text-text-secondary">
-                  Name
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-mono uppercase tracking-wider text-text-secondary">
-                  Description
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-mono uppercase tracking-wider text-text-secondary">
-                  Status
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-mono uppercase tracking-wider text-text-secondary">
-                  Unit of Measure
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {filtered.map((part) => (
-                <Fragment key={part.id}>
-                  <tr
-                    onClick={() =>
-                      setExpandedId(expandedId === part.id ? null : part.id ?? null)
-                    }
-                    className="cursor-pointer bg-surface transition-colors hover:bg-surface-light"
-                  >
-                    <td className="px-4 py-3 text-sm text-text-primary">
-                      {part.name || "—"}
-                    </td>
-                    <td className="px-4 py-3 text-sm text-text-secondary max-w-xs truncate">
-                      {part.description || "—"}
-                    </td>
-                    <td className="px-4 py-3 text-sm">
-                      <StatusBadge status={part.status} />
-                    </td>
-                    <td className="px-4 py-3 text-sm text-text-secondary">
-                      {part.unit_of_measure || "—"}
-                    </td>
-                  </tr>
-                  {expandedId === part.id && (
-                    <tr>
-                      <td colSpan={4} className="bg-surface-light px-4 py-4">
-                        <pre className="overflow-x-auto rounded-md bg-surface p-4 text-xs text-text-secondary font-mono">
-                          {JSON.stringify(part, null, 2)}
-                        </pre>
-                      </td>
-                    </tr>
-                  )}
-                </Fragment>
-              ))}
-            </tbody>
-          </table>
+        <div className="space-y-3">
+          {filteredRoots.map((root) => (
+            <TreeCard
+              key={root.id}
+              root={root}
+              expanded={expandedTrees.has(root.id ?? "")}
+              onToggle={() => root.id && toggleTree(root.id)}
+              searchQuery={search}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+const NODE_TYPE_COLORS: Record<string, string> = {
+  part: "#1E40AF",
+  operation: "#8B5CF6",
+  currency: "#10B981",
+  labor: "#F59E0B",
+  tool: "#6366F1",
+};
+
+function TreeCard({
+  root,
+  expanded,
+  onToggle,
+  searchQuery,
+}: {
+  root: Record<string, any>;
+  expanded: boolean;
+  onToggle: () => void;
+  searchQuery: string;
+}) {
+  const { data: treeData, isLoading } = useQuery({
+    queryKey: ["tree", root.id],
+    queryFn: () => DefaultService.readTreeStructureTreesPartIdGet(root.id!),
+    enabled: expanded && !!root.id,
+  });
+
+  const partCount = treeData ? countParts(treeData) : null;
+
+  return (
+    <div className="rounded-md border border-border bg-surface-light overflow-hidden">
+      <button
+        onClick={onToggle}
+        className="flex w-full items-center gap-3 px-5 py-4 text-left hover:bg-surface transition-colors"
+      >
+        {expanded ? (
+          <ChevronDown className="h-5 w-5 text-primary flex-shrink-0" />
+        ) : (
+          <ChevronRight className="h-5 w-5 text-text-muted flex-shrink-0" />
+        )}
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-3">
+            <span className="font-mono text-sm font-semibold text-text-primary truncate">
+              {root.name || "Unnamed Product"}
+            </span>
+            <StatusBadge status={root.status} />
+            {partCount !== null && (
+              <span className="text-xs text-text-muted">
+                {partCount} part{partCount !== 1 ? "s" : ""}
+              </span>
+            )}
+          </div>
+          {root.description && (
+            <p className="mt-0.5 text-xs text-text-muted truncate">
+              {root.description}
+            </p>
+          )}
+        </div>
+        {root.unit_of_measure && (
+          <span className="text-xs text-text-muted flex-shrink-0">
+            {root.unit_of_measure}
+          </span>
+        )}
+      </button>
+
+      {expanded && (
+        <div className="border-t border-border px-5 py-4">
+          {isLoading ? (
+            <div className="flex items-center justify-center py-6">
+              <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+            </div>
+          ) : treeData ? (
+            <TreeNode node={treeData} depth={0} searchQuery={searchQuery} />
+          ) : (
+            <p className="text-sm text-text-muted">No tree data available.</p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function countParts(node: Record<string, any>): number {
+  let count = node.type === "part" ? 1 : 0;
+  if (node.children) {
+    for (const child of node.children) {
+      count += countParts(child);
+    }
+  }
+  return count;
+}
+
+function TreeNode({
+  node,
+  depth,
+  searchQuery,
+}: {
+  node: Record<string, any>;
+  depth: number;
+  searchQuery: string;
+}) {
+  const [collapsed, setCollapsed] = useState(depth > 2);
+  const children = node.children as Record<string, any>[] | undefined;
+  const hasChildren = children && children.length > 0;
+  const typeColor = NODE_TYPE_COLORS[node.type?.toLowerCase?.()] || "#71717A";
+
+  return (
+    <div style={{ marginLeft: depth * 20 }}>
+      <div
+        className="flex items-center gap-2 py-1.5 cursor-pointer group"
+        onClick={() => hasChildren && setCollapsed(!collapsed)}
+      >
+        {hasChildren && (
+          <span className="text-xs text-text-muted w-4 text-center">
+            {collapsed ? "▸" : "▾"}
+          </span>
+        )}
+        {!hasChildren && <span className="w-4" />}
+        <span className="text-sm text-text-primary group-hover:text-primary transition-colors">
+          {node.name || node.id || "Unknown"}
+        </span>
+        {node.type && (
+          <span
+            className="rounded-full px-2 py-0.5 text-xs font-medium"
+            style={{ backgroundColor: typeColor + "30", color: typeColor }}
+          >
+            {node.type}
+          </span>
+        )}
+        {node.quantity !== undefined && node.quantity !== null && (
+          <span className="text-xs text-text-muted">
+            x{node.quantity}{node.unit ? ` ${node.unit}` : ""}
+          </span>
+        )}
+        {node.unit_cost !== undefined && node.unit_cost !== null && (
+          <span className="text-xs text-text-muted">
+            ${Number(node.unit_cost).toFixed(2)}
+          </span>
+        )}
+      </div>
+      {hasChildren && !collapsed && (
+        <div>
+          {children.map((child: Record<string, any>, i: number) => (
+            <TreeNode key={child.id || i} node={child} depth={depth + 1} searchQuery={searchQuery} />
+          ))}
         </div>
       )}
     </div>
