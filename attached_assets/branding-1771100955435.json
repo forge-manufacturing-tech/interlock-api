@@ -1,0 +1,119 @@
+{
+  "colorScheme": "dark",
+  "fonts": [
+    {
+      "family": "JetBrains Mono",
+      "role": "monospace"
+    },
+    {
+      "family": "Inter",
+      "role": "body"
+    }
+  ],
+  "colors": {
+    "primary": "#EC5B13",
+    "accent": "#CC6731",
+    "background": "#09090B",
+    "textPrimary": "#09090B",
+    "link": "#CC6731"
+  },
+  "typography": {
+    "fontFamilies": {
+      "primary": "Inter",
+      "heading": "Inter"
+    },
+    "fontStacks": {
+      "heading": [
+        "JetBrains Mono",
+        "monospace"
+      ],
+      "body": [
+        "Inter",
+        "sans-serif"
+      ],
+      "paragraph": [
+        "JetBrains Mono",
+        "monospace"
+      ]
+    },
+    "fontSizes": {
+      "h1": "96px",
+      "h2": "36px",
+      "body": "12px"
+    }
+  },
+  "spacing": {
+    "baseUnit": 4,
+    "borderRadius": "0px"
+  },
+  "components": {
+    "buttonPrimary": {
+      "background": "#EC5B13",
+      "textColor": "#FFFFFF",
+      "borderRadius": "6px",
+      "borderRadiusCorners": {
+        "topLeft": "6px",
+        "topRight": "6px",
+        "bottomRight": "6px",
+        "bottomLeft": "6px"
+      },
+      "shadow": "none"
+    },
+    "buttonSecondary": {
+      "background": "#09090B",
+      "textColor": "#DDD9D5",
+      "borderColor": "#26262B",
+      "borderRadius": "6px",
+      "borderRadiusCorners": {
+        "topLeft": "6px",
+        "topRight": "6px",
+        "bottomRight": "6px",
+        "bottomLeft": "6px"
+      },
+      "shadow": "none"
+    }
+  },
+  "images": {
+    "logo": null,
+    "favicon": "https://interlock-systems.netlify.app/logo.png",
+    "ogImage": null
+  },
+  "__llm_button_reasoning": {
+    "primary": {
+      "index": 0,
+      "text": "INITIALIZE TRANSFER",
+      "reasoning": "The 'INITIALIZE TRANSFER' button uses a vibrant orange color (#EC5B13), which is typically associated with primary actions. The text is action-oriented, suggesting a key function of the site."
+    },
+    "secondary": {
+      "index": 1,
+      "text": "LEARN MORE",
+      "reasoning": "The 'LEARN MORE' button has a dark background (#09090B) and serves as a secondary action, providing additional information rather than initiating a primary process."
+    },
+    "confidence": 0.95
+  },
+  "personality": {
+    "tone": "modern",
+    "energy": "medium",
+    "targetAudience": "engineers and manufacturers"
+  },
+  "designSystem": {
+    "framework": "tailwind",
+    "componentLibrary": ""
+  },
+  "confidence": {
+    "buttons": 0.95,
+    "colors": 0.9,
+    "overall": 0.925
+  },
+  "__llm_metadata": {
+    "logoSelection": {
+      "llmCalled": false,
+      "llmSucceeded": false,
+      "finalSource": "none"
+    },
+    "buttonClassification": {
+      "llmCalled": true,
+      "llmSucceeded": true
+    }
+  }
+}
