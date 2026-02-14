@@ -4,12 +4,21 @@ from ai.agent import get_tech_transfer_agent
 from auth.dependencies import get_current_user
 from auth.routes import router as auth_router
 from fastapi import Depends, FastAPI, File, HTTPException, UploadFile
+from fastapi.middleware.cors import CORSMiddleware
 from models.main import PartNode
 from orm.main import get_part, get_tree_json, list_parts, list_root_parts
 from parsers.bom import parse_messy_bom
 from scalar_fastapi import get_scalar_api_reference
 
 app = FastAPI(title="Interlock API", description="Manufacturing Graph Intelligence")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 app.include_router(auth_router)
 

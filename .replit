@@ -29,13 +29,13 @@ args = "Start application"
 name = "Start application"
 author = "agent"
 
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "bash -c \"cd /home/runner/workspace && uv run uvicorn api.main:app --host 127.0.0.1 --port 8000 & uv run streamlit run packages/frontend/src/frontend/main.py\""
-waitForPort = 5000
-
 [workflows.workflow.metadata]
 outputType = "webview"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "cd /home/runner/workspace/frontend && npm run dev"
+waitForPort = 5000
 
 [[ports]]
 localPort = 5000
