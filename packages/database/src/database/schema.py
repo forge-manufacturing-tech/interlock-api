@@ -1,5 +1,5 @@
 """
-SQLite schema for the Interlock manufacturing tree.
+PostgreSQL schema for the Interlock manufacturing tree.
 
 Tables
 ------
@@ -28,7 +28,6 @@ if TYPE_CHECKING:
 
 
 _DDL: list[str] = [
-    # ── Node tables ─────────────────────────────────────────────────
     """
     CREATE TABLE IF NOT EXISTS part_nodes (
         id              TEXT PRIMARY KEY,
@@ -54,7 +53,7 @@ _DDL: list[str] = [
         id              TEXT PRIMARY KEY,
         name            TEXT NOT NULL,
         description     TEXT,
-        hourly_rate     REAL NOT NULL DEFAULT 0.0,
+        hourly_rate     DOUBLE PRECISION NOT NULL DEFAULT 0.0,
         skill_level     TEXT
     )
     """,
@@ -65,9 +64,9 @@ _DDL: list[str] = [
         description     TEXT,
         linked_part_id  TEXT NOT NULL
             REFERENCES part_nodes(id),
-        cost_rate       REAL NOT NULL DEFAULT 0.0,
+        cost_rate       DOUBLE PRECISION NOT NULL DEFAULT 0.0,
         rate_unit       TEXT NOT NULL DEFAULT 'hour',
-        setup_time_minutes REAL NOT NULL DEFAULT 0.0
+        setup_time_minutes DOUBLE PRECISION NOT NULL DEFAULT 0.0
     )
     """,
     """
@@ -77,21 +76,20 @@ _DDL: list[str] = [
         description                 TEXT,
         op_type                     TEXT NOT NULL DEFAULT 'STANDARD',
         instructions                TEXT,
-        setup_time_minutes          REAL NOT NULL DEFAULT 0.0,
-        estimated_duration_minutes  REAL NOT NULL DEFAULT 0.0,
-        yield_rate                  REAL NOT NULL DEFAULT 1.0,
-        cost_estimate               REAL NOT NULL DEFAULT 0.0,
+        setup_time_minutes          DOUBLE PRECISION NOT NULL DEFAULT 0.0,
+        estimated_duration_minutes  DOUBLE PRECISION NOT NULL DEFAULT 0.0,
+        yield_rate                  DOUBLE PRECISION NOT NULL DEFAULT 1.0,
+        cost_estimate               DOUBLE PRECISION NOT NULL DEFAULT 0.0,
         properties                  TEXT NOT NULL DEFAULT '{}'
     )
     """,
-    # ── Input tables (Edges) ────────────────────────────────────────
     """
     CREATE TABLE IF NOT EXISTS operation_input_parts (
         operation_id    TEXT NOT NULL
             REFERENCES operation_nodes(id) ON DELETE CASCADE,
         part_id         TEXT NOT NULL
             REFERENCES part_nodes(id) ON DELETE CASCADE,
-        quantity        REAL NOT NULL DEFAULT 0.0
+        quantity        DOUBLE PRECISION NOT NULL DEFAULT 0.0
             CHECK (quantity > 0),
         unit            TEXT NOT NULL DEFAULT 'each',
         PRIMARY KEY (operation_id, part_id)
@@ -103,7 +101,7 @@ _DDL: list[str] = [
             REFERENCES operation_nodes(id) ON DELETE CASCADE,
         labor_id        TEXT NOT NULL
             REFERENCES labor_nodes(id) ON DELETE CASCADE,
-        quantity        REAL NOT NULL DEFAULT 0.0
+        quantity        DOUBLE PRECISION NOT NULL DEFAULT 0.0
             CHECK (quantity > 0),
         unit            TEXT NOT NULL DEFAULT 'hours',
         PRIMARY KEY (operation_id, labor_id)
@@ -115,7 +113,7 @@ _DDL: list[str] = [
             REFERENCES operation_nodes(id) ON DELETE CASCADE,
         tool_id         TEXT NOT NULL
             REFERENCES tool_nodes(id) ON DELETE CASCADE,
-        quantity        REAL NOT NULL DEFAULT 0.0
+        quantity        DOUBLE PRECISION NOT NULL DEFAULT 0.0
             CHECK (quantity > 0),
         unit            TEXT NOT NULL DEFAULT 'hours',
         PRIMARY KEY (operation_id, tool_id)
@@ -127,7 +125,7 @@ _DDL: list[str] = [
             REFERENCES operation_nodes(id) ON DELETE CASCADE,
         currency_id     TEXT NOT NULL
             REFERENCES currency_nodes(id) ON DELETE CASCADE,
-        quantity        REAL NOT NULL DEFAULT 0.0
+        quantity        DOUBLE PRECISION NOT NULL DEFAULT 0.0
             CHECK (quantity > 0),
         unit            TEXT NOT NULL DEFAULT 'units',
         PRIMARY KEY (operation_id, currency_id)
@@ -139,5 +137,7 @@ _DDL: list[str] = [
 def initialize_schema(db: DatabaseManager) -> None:
     """Create all tables idempotently."""
     for stmt in _DDL:
-        db.execute(stmt)
-    db.commit()
+        try:
+            db.execute_ddl(stmt)
+        except Exception:
+            pass

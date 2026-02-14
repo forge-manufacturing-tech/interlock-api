@@ -4,20 +4,14 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
-from .dependencies import get_current_user, require_admin
+from .dependencies import get_current_user, require_admin, _get_auth_repo
 from .models import ApiKeyCreate, ApiKeyRead, TokenResponse, UserCreate, UserLogin, UserRead, UserUpdate
-from .repository import AuthRepository
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
-_auth_repo: AuthRepository | None = None
 
-
-def _get_repo() -> AuthRepository:
-    global _auth_repo
-    if _auth_repo is None:
-        _auth_repo = AuthRepository()
-    return _auth_repo
+def _get_repo():
+    return _get_auth_repo()
 
 
 @router.post("/signup", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)

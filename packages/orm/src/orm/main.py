@@ -89,8 +89,18 @@ __all__ = [
 # ── Helpers ────────────────────────────────────────────────────────
 
 
+_shared_db: DatabaseManager | None = None
+_shared_repo: GraphRepository | None = None
+
+
 def _repo(db: DatabaseManager | None = None) -> GraphRepository:
-    return GraphRepository(db or DatabaseManager())
+    global _shared_db, _shared_repo
+    if db is not None:
+        return GraphRepository(db)
+    if _shared_repo is None:
+        _shared_db = DatabaseManager()
+        _shared_repo = GraphRepository(_shared_db)
+    return _shared_repo
 
 
 # ── Atomic Transactions ────────────────────────────────────────────

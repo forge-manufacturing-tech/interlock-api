@@ -1,4 +1,4 @@
-modules = ["bash", "nodejs-20", "python-3.12"]
+modules = ["bash", "nodejs-20", "python-3.12", "postgresql-16"]
 [agent]
 expertMode = true
 integrations = ["python_openai_ai_integrations:1.0.0"]
@@ -44,5 +44,5 @@ externalPort = 80
 
 [deployment]
 deploymentTarget = "autoscale"
-run = ["bash", "-c", "cd /home/runner/workspace && uv run uvicorn api.main:app --host 0.0.0.0 --port 5000 & cd /home/runner/workspace/frontend && npm run build && npx serve -s dist -l 3000"]
+run = ["bash", "-c", "cd /home/runner/workspace && uv run uvicorn api.main:app --host 0.0.0.0 --port 5000"]
 build = ["bash", "-c", "cd /home/runner/workspace/frontend && npm run build"]

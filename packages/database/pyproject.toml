@@ -1,7 +1,7 @@
 [project]
 name = "database"
 version = "0.1.0"
-description = "SQLite database manager for Interlock API"
+description = "PostgreSQL database manager for Interlock API"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [

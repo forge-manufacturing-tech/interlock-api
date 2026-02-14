@@ -4,11 +4,12 @@
 A Python monorepo for managing manufacturing graphs, parts, and bill of materials (BOM). The system provides an AI-powered agent for querying and modifying the manufacturing graph, along with a modern React frontend for visualization and data management. Includes user authentication with JWT tokens and API key management for programmatic access.
 
 ## Architecture
-- **Backend**: FastAPI API server (`apps/api`) running on port 8000
-- **Frontend**: React + Vite + TypeScript app (`frontend/`) running on port 5000, proxies API requests to backend
-- **Database**: SQLite (file-based, configured via `DB_PATH` env var, default `./data/interlock.db`)
+- **Backend**: FastAPI API server (`apps/api`) running on port 8000 (dev) or port 5000 (production, serving static frontend)
+- **Frontend**: React + Vite + TypeScript app (`frontend/`) running on port 5000 (dev), proxies API requests to backend
+- **Database**: PostgreSQL (Replit built-in, Neon-backed, configured via `DATABASE_URL` env var)
 - **AI Agent**: LangChain-based agent using OpenAI via Replit AI Integrations (`packages/ai`), supports multimodal inputs (PDF, images)
 - **Auth**: JWT-based authentication with API key support (`packages/auth`)
+- **Deployment**: Autoscale mode - backend serves both API and built frontend static files on single port 5000
 
 ## Project Structure
 ```
@@ -27,7 +28,7 @@ A Python monorepo for managing manufacturing graphs, parts, and bill of material
 │   ├── ai/              # AI agent logic (LangChain + OpenAI via Replit AI)
 │   ├── auth/            # Authentication (JWT, API keys, user management)
 │   ├── core/            # Core shared utilities
-│   ├── database/        # SQLite database manager
+│   ├── database/        # PostgreSQL database manager (psycopg2)
 │   ├── models/          # Pydantic data models
 │   ├── orm/             # CRUD repository for manufacturing graph
 │   └── parsers/         # BOM file parsers (Excel, DXF, etc.)
@@ -43,12 +44,12 @@ A Python monorepo for managing manufacturing graphs, parts, and bill of material
 - **API Client**: Auto-generated from OpenAPI spec using openapi-typescript-codegen
 - **State Management**: React Query (@tanstack/react-query), React Context (auth)
 - **Routing**: React Router v6
-- **Database**: SQLite
+- **Database**: PostgreSQL (Replit built-in, via psycopg2)
 - **AI**: LangChain, LangGraph, OpenAI via Replit AI Integrations
 - **Auth**: bcrypt (password hashing), PyJWT (tokens)
 
 ## Environment Variables
-- `DB_PATH`: Path to SQLite database file (default: `./data/interlock.db`)
+- `DATABASE_URL`: PostgreSQL connection string (auto-set by Replit)
 - `AI_INTEGRATIONS_OPENAI_API_KEY`: Auto-set by Replit AI Integrations (do not modify)
 - `AI_INTEGRATIONS_OPENAI_BASE_URL`: Auto-set by Replit AI Integrations (do not modify)
 - `JWT_SECRET`: Secret key for JWT token signing (required)
@@ -87,6 +88,17 @@ The workflow runs both backend and frontend:
 - Backend: `uv run uvicorn api.main:app --host 127.0.0.1 --port 8000`
 - Frontend: `cd frontend && npm run dev` (Vite dev server on port 5000, proxies `/api` to backend)
 
+## Deployment (Autoscale)
+- Build: `cd frontend && npm run build` (outputs to `frontend/dist/`)
+- Run: `uv run uvicorn api.main:app --host 0.0.0.0 --port 5000` (serves API + static frontend)
+- Backend detects `frontend/dist/` and serves SPA with catch-all route for client-side routing
+
+## Database Notes
+- PostgreSQL with psycopg2 (RealDictCursor for dict rows)
+- Schema initialization uses autocommit DDL (execute_ddl) to avoid lock contention
+- Singleton database connections per module (auth, orm) to prevent concurrent schema init deadlocks
+- Manual transaction management: autocommit=False for DML, explicit commit/rollback required
+
 ## Design System
 - **Theme**: Dark mode with orange (#EC5B13) primary accent
 - **Fonts**: JetBrains Mono (headings/monospace), Inter (body)
@@ -94,6 +106,8 @@ The workflow runs both backend and frontend:
 - **Inspired by**: https://interlock-systems.netlify.app
 
 ## Recent Changes
+- 2026-02-14: Migrated database from SQLite to PostgreSQL for autoscale deployment compatibility; converted all SQL syntax (placeholders, ON CONFLICT, BOOLEAN types, DOUBLE PRECISION, NOW()); added singleton DB connections and autocommit DDL to prevent lock deadlocks
+- 2026-02-14: Configured autoscale deployment - backend serves frontend static files in production on single port 5000
 - 2026-02-14: Added role-based access control - first user is admin, subsequent users are members; admins can enable/disable AI access per user via User Management page
 - 2026-02-14: Added multimodal chat - agent accepts PDF uploads (text extraction via PyMuPDF) and images (analyzed via OpenAI vision), tree export as CSV BOM and markdown work instructions
 - 2026-02-14: Switched AI agent from Google Gemini to Replit AI Integrations (OpenAI-compatible, gpt-5/gpt-5-mini)

@@ -65,9 +65,13 @@ class ValidationResult:
 class GraphRepository:
     """Full CRUD, traversal, and validation for the tree."""
 
+    _schema_initialized = False
+
     def __init__(self, db: DatabaseManager) -> None:
         self.db = db
-        initialize_schema(db)
+        if not GraphRepository._schema_initialized:
+            initialize_schema(db)
+            GraphRepository._schema_initialized = True
 
     # ===============================================================
     # Atomic Transactions (Strict Tree Construction)
@@ -120,7 +124,7 @@ class GraphRepository:
             self.db.commit()
             return part
         except Exception:
-            self.db.connection.rollback()
+            self.db.rollback()
             raise
 
     def manufacture_part(
@@ -233,7 +237,7 @@ class GraphRepository:
             self.db.commit()
             return part
         except Exception:
-            self.db.connection.rollback()
+            self.db.rollback()
             raise
 
     # ===============================================================
@@ -245,7 +249,7 @@ class GraphRepository:
             """
             INSERT INTO part_nodes
                 (id, name, description, status, unit_of_measure)
-            VALUES (?, ?, ?, ?, ?)
+            VALUES (%s, %s, %s, %s, %s)
             """,
             (
                 str(part.id),
@@ -259,7 +263,7 @@ class GraphRepository:
 
     def get_part(self, part_id: UUID) -> PartNode | None:
         row = self.db.fetch_one(
-            "SELECT * FROM part_nodes WHERE id = ?",
+            "SELECT * FROM part_nodes WHERE id = %s",
             (str(part_id),),
         )
         return self._to_part(row) if row else None
@@ -274,13 +278,13 @@ class GraphRepository:
         clauses: list[str] = []
         params: list[object] = []
         if status is not None:
-            clauses.append("status = ?")
+            clauses.append("status = %s")
             params.append(status.value)
         where = (" WHERE " + " AND ".join(clauses)) if clauses else ""
         params += [limit, offset]
         rows = self.db.fetch_all(
             f"SELECT * FROM part_nodes{where}"  # noqa: S608
-            " ORDER BY name LIMIT ? OFFSET ?",
+            " ORDER BY name LIMIT %s OFFSET %s",
             tuple(params),
         )
         return [self._to_part(r) for r in rows]
@@ -413,8 +417,8 @@ class GraphRepository:
         cur = self.db.execute(
             """
             UPDATE part_nodes
-            SET name = ?, description = ?, status = ?, unit_of_measure = ?
-            WHERE id = ?
+            SET name = %s, description = %s, status = %s, unit_of_measure = %s
+            WHERE id = %s
             """,
             (
                 part.name,
@@ -431,7 +435,7 @@ class GraphRepository:
 
     def delete_part(self, part_id: UUID) -> bool:
         cur = self.db.execute(
-            "DELETE FROM part_nodes WHERE id = ?",
+            "DELETE FROM part_nodes WHERE id = %s",
             (str(part_id),),
         )
         self.db.commit()
@@ -445,7 +449,7 @@ class GraphRepository:
         self.db.execute(
             """
             INSERT INTO currency_nodes (id, name, description, iso_code)
-            VALUES (?, ?, ?, ?)
+            VALUES (%s, %s, %s, %s)
             """,
             (str(curr.id), curr.name, curr.description, curr.iso_code),
         )
@@ -454,7 +458,7 @@ class GraphRepository:
 
     def get_currency(self, curr_id: UUID) -> CurrencyNode | None:
         row = self.db.fetch_one(
-            "SELECT * FROM currency_nodes WHERE id = ?", (str(curr_id),)
+            "SELECT * FROM currency_nodes WHERE id = %s", (str(curr_id),)
         )
         return self._to_currency(row) if row else None
 
@@ -464,7 +468,7 @@ class GraphRepository:
 
     def delete_currency(self, curr_id: UUID) -> bool:
         cur = self.db.execute(
-            "DELETE FROM currency_nodes WHERE id = ?", (str(curr_id),)
+            "DELETE FROM currency_nodes WHERE id = %s", (str(curr_id),)
         )
         self.db.commit()
         return cur.rowcount > 0
@@ -482,7 +486,7 @@ class GraphRepository:
             """
             INSERT INTO labor_nodes
                 (id, name, description, hourly_rate, skill_level)
-            VALUES (?, ?, ?, ?, ?)
+            VALUES (%s, %s, %s, %s, %s)
             """,
             (
                 str(labor.id),
@@ -497,7 +501,7 @@ class GraphRepository:
 
     def get_labor(self, labor_id: UUID) -> LaborNode | None:
         row = self.db.fetch_one(
-            "SELECT * FROM labor_nodes WHERE id = ?", (str(labor_id),)
+            "SELECT * FROM labor_nodes WHERE id = %s", (str(labor_id),)
         )
         return self._to_labor(row) if row else None
 
@@ -531,7 +535,7 @@ class GraphRepository:
             INSERT INTO tool_nodes
                 (id, name, description, linked_part_id,
                  cost_rate, rate_unit, setup_time_minutes)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
             """,
             (
                 str(tool.id),
@@ -548,7 +552,7 @@ class GraphRepository:
 
     def get_tool(self, tool_id: UUID) -> ToolNode | None:
         row = self.db.fetch_one(
-            "SELECT * FROM tool_nodes WHERE id = ?", (str(tool_id),)
+            "SELECT * FROM tool_nodes WHERE id = %s", (str(tool_id),)
         )
         return self._to_tool(row) if row else None
 
@@ -568,7 +572,7 @@ class GraphRepository:
                  instructions, setup_time_minutes,
                  estimated_duration_minutes, yield_rate,
                  cost_estimate, properties)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             """,
             (
                 str(op.id),
@@ -587,7 +591,7 @@ class GraphRepository:
 
     def get_operation(self, op_id: UUID) -> OperationNode | None:
         row = self.db.fetch_one(
-            "SELECT * FROM operation_nodes WHERE id = ?",
+            "SELECT * FROM operation_nodes WHERE id = %s",
             (str(op_id),),
         )
         return self._to_op(row) if row else None
@@ -602,13 +606,13 @@ class GraphRepository:
         if op_type is not None:
             rows = self.db.fetch_all(
                 "SELECT * FROM operation_nodes"
-                " WHERE op_type = ?"
-                " ORDER BY name LIMIT ? OFFSET ?",
+                " WHERE op_type = %s"
+                " ORDER BY name LIMIT %s OFFSET %s",
                 (op_type.value, limit, offset),
             )
         else:
             rows = self.db.fetch_all(
-                "SELECT * FROM operation_nodes ORDER BY name LIMIT ? OFFSET ?",
+                "SELECT * FROM operation_nodes ORDER BY name LIMIT %s OFFSET %s",
                 (limit, offset),
             )
         return [self._to_op(r) for r in rows]
@@ -617,15 +621,15 @@ class GraphRepository:
         cur = self.db.execute(
             """
             UPDATE operation_nodes
-            SET name = ?, description = ?,
-                op_type = ?,
-                instructions = ?,
-                setup_time_minutes = ?,
-                estimated_duration_minutes = ?,
-                yield_rate = ?,
-                cost_estimate = ?,
-                properties = ?
-            WHERE id = ?
+            SET name = %s, description = %s,
+                op_type = %s,
+                instructions = %s,
+                setup_time_minutes = %s,
+                estimated_duration_minutes = %s,
+                yield_rate = %s,
+                cost_estimate = %s,
+                properties = %s
+            WHERE id = %s
             """,
             (
                 op.name,
@@ -647,7 +651,7 @@ class GraphRepository:
 
     def delete_operation(self, op_id: UUID) -> bool:
         cur = self.db.execute(
-            "DELETE FROM operation_nodes WHERE id = ?",
+            "DELETE FROM operation_nodes WHERE id = %s",
             (str(op_id),),
         )
         self.db.commit()
@@ -679,11 +683,11 @@ class GraphRepository:
         self.db.execute(
             """
             UPDATE part_nodes
-            SET created_by_id = ?, created_by_type = (
+            SET created_by_id = %s, created_by_type = (
                 SELECT op_type FROM operation_nodes
-                WHERE id = ?
+                WHERE id = %s
             )
-            WHERE id = ?
+            WHERE id = %s
             """,
             (str(op_id), str(op_id), str(part_id)),
         )
@@ -694,7 +698,7 @@ class GraphRepository:
             UPDATE part_nodes
             SET created_by_id = NULL,
                 created_by_type = NULL
-            WHERE id = ?
+            WHERE id = %s
             """,
             (str(part_id),),
         )
@@ -702,7 +706,7 @@ class GraphRepository:
 
     def get_created_by(self, part_id: UUID) -> OperationNode | None:
         row = self.db.fetch_one(
-            "SELECT created_by_id FROM part_nodes WHERE id = ?",
+            "SELECT created_by_id FROM part_nodes WHERE id = %s",
             (str(part_id),),
         )
         if not row or not row["created_by_id"]:
@@ -711,7 +715,7 @@ class GraphRepository:
 
     def get_output_part(self, op_id: UUID) -> PartNode | None:
         row = self.db.fetch_one(
-            "SELECT * FROM part_nodes WHERE created_by_id = ?",
+            "SELECT * FROM part_nodes WHERE created_by_id = %s",
             (str(op_id),),
         )
         return self._to_part(row) if row else None
@@ -727,9 +731,10 @@ class GraphRepository:
     ) -> None:
         self.db.execute(
             """
-            INSERT OR REPLACE INTO operation_input_parts
+            INSERT INTO operation_input_parts
                 (operation_id, part_id, quantity, unit)
-            VALUES (?, ?, ?, ?)
+            VALUES (%s, %s, %s, %s)
+            ON CONFLICT (operation_id, part_id) DO UPDATE SET quantity = EXCLUDED.quantity, unit = EXCLUDED.unit
             """,
             (str(op_id), str(part_id), quantity, unit),
         )
@@ -740,7 +745,7 @@ class GraphRepository:
             SELECT p.*, i.quantity, i.unit
             FROM part_nodes p
             JOIN operation_input_parts i ON i.part_id = p.id
-            WHERE i.operation_id = ?
+            WHERE i.operation_id = %s
             """,
             (str(op_id),),
         )
@@ -760,9 +765,10 @@ class GraphRepository:
     ) -> None:
         self.db.execute(
             """
-            INSERT OR REPLACE INTO operation_input_labor
+            INSERT INTO operation_input_labor
                 (operation_id, labor_id, quantity, unit)
-            VALUES (?, ?, ?, ?)
+            VALUES (%s, %s, %s, %s)
+            ON CONFLICT (operation_id, labor_id) DO UPDATE SET quantity = EXCLUDED.quantity, unit = EXCLUDED.unit
             """,
             (str(op_id), str(labor_id), quantity, unit),
         )
@@ -773,7 +779,7 @@ class GraphRepository:
             SELECT l.*, i.quantity, i.unit
             FROM labor_nodes l
             JOIN operation_input_labor i ON i.labor_id = l.id
-            WHERE i.operation_id = ?
+            WHERE i.operation_id = %s
             """,
             (str(op_id),),
         )
@@ -793,9 +799,10 @@ class GraphRepository:
     ) -> None:
         self.db.execute(
             """
-            INSERT OR REPLACE INTO operation_input_tools
+            INSERT INTO operation_input_tools
                 (operation_id, tool_id, quantity, unit)
-            VALUES (?, ?, ?, ?)
+            VALUES (%s, %s, %s, %s)
+            ON CONFLICT (operation_id, tool_id) DO UPDATE SET quantity = EXCLUDED.quantity, unit = EXCLUDED.unit
             """,
             (str(op_id), str(tool_id), quantity, unit),
         )
@@ -806,7 +813,7 @@ class GraphRepository:
             SELECT t.*, i.quantity, i.unit
             FROM tool_nodes t
             JOIN operation_input_tools i ON i.tool_id = t.id
-            WHERE i.operation_id = ?
+            WHERE i.operation_id = %s
             """,
             (str(op_id),),
         )
@@ -826,9 +833,10 @@ class GraphRepository:
     ) -> None:
         self.db.execute(
             """
-            INSERT OR REPLACE INTO operation_input_currency
+            INSERT INTO operation_input_currency
                 (operation_id, currency_id, quantity, unit)
-            VALUES (?, ?, ?, ?)
+            VALUES (%s, %s, %s, %s)
+            ON CONFLICT (operation_id, currency_id) DO UPDATE SET quantity = EXCLUDED.quantity, unit = EXCLUDED.unit
             """,
             (str(op_id), str(curr_id), quantity, unit),
         )
@@ -839,7 +847,7 @@ class GraphRepository:
             SELECT c.*, i.quantity, i.unit
             FROM currency_nodes c
             JOIN operation_input_currency i ON i.currency_id = c.id
-            WHERE i.operation_id = ?
+            WHERE i.operation_id = %s
             """,
             (str(op_id),),
         )

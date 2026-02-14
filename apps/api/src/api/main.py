@@ -30,6 +30,8 @@ app.add_middleware(
 
 app.include_router(auth_router)
 
+STATIC_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "..", "..", "frontend", "dist")
+
 
 @app.get("/")
 def read_root():
@@ -344,3 +346,20 @@ async def read_tree_structure(
 ) -> dict:
     """Get a recursive tree structure starting from part_id."""
     return get_tree_json(part_id)
+
+
+if os.path.isdir(STATIC_DIR):
+    from starlette.staticfiles import StaticFiles
+    from starlette.responses import FileResponse
+
+    @app.get("/{full_path:path}")
+    async def serve_spa(full_path: str):
+        file_path = os.path.join(STATIC_DIR, full_path)
+        if os.path.isfile(file_path):
+            return FileResponse(file_path)
+        index = os.path.join(STATIC_DIR, "index.html")
+        if os.path.isfile(index):
+            return FileResponse(index)
+        return {"detail": "Not found"}
+
+    app.mount("/assets", StaticFiles(directory=os.path.join(STATIC_DIR, "assets")), name="static-assets")
