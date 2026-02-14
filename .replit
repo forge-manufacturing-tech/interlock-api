@@ -1,0 +1,44 @@
+modules = ["python-3.12", "bash"]
+[agent]
+expertMode = true
+
+[nix]
+channel = "stable-25_05"
+packages = ["graphviz"]
+
+[userenv]
+
+[userenv.shared]
+DB_PATH = "./data/interlock.db"
+
+[workflows]
+runButton = "Project"
+
+[[workflows.workflow]]
+name = "Project"
+mode = "parallel"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Start application"
+
+[[workflows.workflow]]
+name = "Start application"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "bash -c \"cd /home/runner/workspace && uv run uvicorn api.main:app --host 127.0.0.1 --port 8000 & uv run streamlit run packages/frontend/src/frontend/main.py\""
+waitForPort = 5000
+
+[workflows.workflow.metadata]
+outputType = "webview"
+
+[[ports]]
+localPort = 5000
+externalPort = 80
+
+[deployment]
+deploymentTarget = "vm"
+run = ["bash", "-c", "cd /home/runner/workspace && uv run uvicorn api.main:app --host 127.0.0.1 --port 8000 & uv run streamlit run packages/frontend/src/frontend/main.py"]
