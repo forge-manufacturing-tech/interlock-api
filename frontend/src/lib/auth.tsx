@@ -21,6 +21,8 @@ interface AuthContextType {
   login: (data: UserLogin) => Promise<void>;
   signup: (data: UserCreate) => Promise<void>;
   logout: () => void;
+  isAdmin: boolean;
+  hasAiAccess: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -79,8 +81,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
   };
 
+  const isAdmin = user?.role === "admin";
+  const hasAiAccess = isAdmin || !!user?.ai_enabled;
+
   return (
-    <AuthContext.Provider value={{ token, user, loading, login, signup, logout }}>
+    <AuthContext.Provider value={{ token, user, loading, login, signup, logout, isAdmin, hasAiAccess }}>
       {children}
     </AuthContext.Provider>
   );

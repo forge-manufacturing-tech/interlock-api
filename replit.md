@@ -54,20 +54,25 @@ A Python monorepo for managing manufacturing graphs, parts, and bill of material
 - `JWT_SECRET`: Secret key for JWT token signing (required)
 - `JWT_EXP_MINUTES`: JWT token expiry in minutes (default: 1440 = 24 hours)
 
-## Authentication
+## Authentication & Authorization
 - **Web UI**: Users sign up/login via the React frontend; JWT stored in localStorage
 - **API Access**: Two methods supported:
   - Bearer token: `Authorization: Bearer <jwt_token>`
   - API key: `x-api-key: <api_key>` header
+- **Roles**: `admin` (first user created) and `member` (all subsequent users)
+- **AI Access**: Members cannot use the AI agent unless an admin enables `ai_enabled` for them. Admins always have AI access.
 - **Auth Endpoints** (unprotected):
-  - `POST /auth/signup` - Create account
+  - `POST /auth/signup` - Create account (first user becomes admin)
   - `POST /auth/login` - Sign in
 - **Auth Endpoints** (protected):
-  - `GET /auth/me` - Get current user
+  - `GET /auth/me` - Get current user (includes role, ai_enabled)
   - `POST /auth/api-keys` - Create API key
   - `GET /auth/api-keys` - List API keys
   - `DELETE /auth/api-keys/{key_id}` - Revoke API key
-- All other API endpoints require authentication
+- **Admin Endpoints** (admin only):
+  - `GET /auth/admin/users` - List all users
+  - `PATCH /auth/admin/users/{user_id}` - Update user role/AI access
+- All other API endpoints require authentication; agent chat requires AI access
 
 ## Frontend API Client Generation
 The TypeScript API client is auto-generated from the backend's OpenAPI spec:
@@ -89,6 +94,7 @@ The workflow runs both backend and frontend:
 - **Inspired by**: https://interlock-systems.netlify.app
 
 ## Recent Changes
+- 2026-02-14: Added role-based access control - first user is admin, subsequent users are members; admins can enable/disable AI access per user via User Management page
 - 2026-02-14: Added multimodal chat - agent accepts PDF uploads (text extraction via PyMuPDF) and images (analyzed via OpenAI vision), tree export as CSV BOM and markdown work instructions
 - 2026-02-14: Switched AI agent from Google Gemini to Replit AI Integrations (OpenAI-compatible, gpt-5/gpt-5-mini)
 - 2026-02-14: Replaced Streamlit frontend with React + Vite + TypeScript app, auto-generated API client from OpenAPI, added landing page, dashboard with parts/trees/BOM/agent/API keys pages

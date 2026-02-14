@@ -11,6 +11,7 @@ const TreesPage = lazy(() => import("./pages/TreesPage"));
 const IngestPage = lazy(() => import("./pages/IngestPage"));
 const AgentPage = lazy(() => import("./pages/AgentPage"));
 const ApiKeysPage = lazy(() => import("./pages/ApiKeysPage"));
+const AdminPage = lazy(() => import("./pages/AdminPage"));
 
 const Loading = () => (
   <div className="flex h-screen w-screen items-center justify-center bg-surface">
@@ -38,6 +39,7 @@ export default function App() {
           <Route path="ingest" element={<IngestPage />} />
           <Route path="agent" element={<AgentPage />} />
           <Route path="api-keys" element={<ApiKeysPage />} />
+          <Route path="admin" element={<AdminPage />} />
         </Route>
       </Routes>
     </Suspense>

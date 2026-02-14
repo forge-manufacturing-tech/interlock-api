@@ -7,7 +7,7 @@ from uuid import UUID
 
 import fitz
 from ai.agent import get_tech_transfer_agent
-from auth.dependencies import get_current_user
+from auth.dependencies import get_current_user, require_ai_access
 from auth.routes import router as auth_router
 from fastapi import Depends, FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
@@ -94,7 +94,7 @@ def _describe_image_with_ai(content: bytes, filename: str) -> str:
 async def chat_agent(
     message: str = Form(""),
     file: Optional[UploadFile] = File(None),
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_ai_access),
 ):
     """
     Chat with the tech transfer agent.

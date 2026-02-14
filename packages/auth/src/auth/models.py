@@ -21,6 +21,8 @@ class UserRead(BaseModel):
     id: UUID
     email: str
     name: str | None = None
+    role: str = "member"
+    ai_enabled: bool = False
     created_at: str
 
 
@@ -41,3 +43,8 @@ class ApiKeyRead(BaseModel):
     created_at: str
     revoked_at: str | None = None
     last_used_at: str | None = None
+
+
+class UserUpdate(BaseModel):
+    ai_enabled: bool | None = None
+    role: str | None = None

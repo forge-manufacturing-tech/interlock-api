@@ -9,20 +9,23 @@ import {
   LogOut,
   Menu,
   X,
+  Users,
+  Shield,
 } from "lucide-react";
 import { useAuth } from "../lib/auth";
 
-const navItems = [
-  { to: "/dashboard", icon: Boxes, label: "Parts Explorer", end: true },
-  { to: "/dashboard/trees", icon: GitBranch, label: "Tree Visualizer" },
-  { to: "/dashboard/ingest", icon: Upload, label: "BOM Ingest" },
-  { to: "/dashboard/agent", icon: MessageSquare, label: "Agent Chat" },
-  { to: "/dashboard/api-keys", icon: Key, label: "API Keys" },
-];
-
 export default function DashboardLayout() {
-  const { user, logout } = useAuth();
+  const { user, logout, isAdmin } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  const navItems = [
+    { to: "/dashboard", icon: Boxes, label: "Parts Explorer", end: true, show: true },
+    { to: "/dashboard/trees", icon: GitBranch, label: "Tree Visualizer", show: true },
+    { to: "/dashboard/ingest", icon: Upload, label: "BOM Ingest", show: true },
+    { to: "/dashboard/agent", icon: MessageSquare, label: "Agent Chat", show: true },
+    { to: "/dashboard/api-keys", icon: Key, label: "API Keys", show: true },
+    { to: "/dashboard/admin", icon: Users, label: "User Management", show: isAdmin },
+  ];
 
   return (
     <div className="flex h-screen bg-surface text-text-primary">
@@ -51,7 +54,7 @@ export default function DashboardLayout() {
         </div>
 
         <nav className="flex-1 space-y-1 p-3">
-          {navItems.map(({ to, icon: Icon, label, end }) => (
+          {navItems.filter(item => item.show).map(({ to, icon: Icon, label, end }) => (
             <NavLink
               key={to}
               to={to}
@@ -84,6 +87,12 @@ export default function DashboardLayout() {
             INTERLOCK
           </span>
           <div className="flex items-center gap-4">
+            {isAdmin && (
+              <span className="flex items-center gap-1 rounded-full border border-primary/40 bg-primary/10 px-2.5 py-0.5 text-xs font-medium text-primary">
+                <Shield size={12} />
+                Admin
+              </span>
+            )}
             <span className="text-sm text-text-secondary">
               {user?.email}
             </span>

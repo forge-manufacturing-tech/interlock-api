@@ -51,3 +51,23 @@ async def get_current_user(
         detail="Not authenticated. Provide a valid Bearer token or x-api-key header.",
         headers={"WWW-Authenticate": "Bearer"},
     )
+
+
+async def require_admin(current_user: dict = Depends(get_current_user)) -> dict:
+    if current_user.get("role") != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin access required",
+        )
+    return current_user
+
+
+async def require_ai_access(current_user: dict = Depends(get_current_user)) -> dict:
+    if current_user.get("role") == "admin":
+        return current_user
+    if not current_user.get("ai_enabled"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="AI access has not been enabled for your account. Contact an administrator.",
+        )
+    return current_user

@@ -1,4 +1,4 @@
-from .models import ApiKeyCreate, ApiKeyRead, TokenResponse, UserCreate, UserLogin, UserRead
+from .models import ApiKeyCreate, ApiKeyRead, TokenResponse, UserCreate, UserLogin, UserRead, UserUpdate
 from .repository import AuthRepository
 from .security import create_access_token, hash_password, verify_password
 
@@ -7,6 +7,7 @@ __all__ = [
     "UserCreate",
     "UserLogin",
     "UserRead",
+    "UserUpdate",
     "TokenResponse",
     "ApiKeyCreate",
     "ApiKeyRead",

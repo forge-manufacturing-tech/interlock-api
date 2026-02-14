@@ -6,6 +6,8 @@ export type UserRead = {
     id: string;
     email: string;
     name?: (string | null);
+    role?: string;
+    ai_enabled?: boolean;
     created_at: string;
 };
 

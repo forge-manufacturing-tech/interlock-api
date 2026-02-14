@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { DefaultService } from "../api";
-import { Paperclip, Send, X, FileText, Image } from "lucide-react";
+import { Paperclip, Send, X, FileText, Image, Lock } from "lucide-react";
+import { useAuth } from "../lib/auth";
 
 interface Message {
   role: "user" | "assistant";
@@ -9,6 +10,7 @@ interface Message {
 }
 
 export default function AgentPage() {
+  const { hasAiAccess } = useAuth();
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -19,6 +21,23 @@ export default function AgentPage() {
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  if (!hasAiAccess) {
+    return (
+      <div className="flex h-[calc(100vh-4rem)] flex-col items-center justify-center p-6">
+        <div className="rounded-md border border-border bg-surface-light p-12 text-center max-w-md">
+          <Lock className="mx-auto mb-4 h-12 w-12 text-text-muted" />
+          <h2 className="font-mono text-xl font-bold uppercase tracking-wider text-text-primary mb-2">
+            AI Access Required
+          </h2>
+          <p className="text-text-secondary text-sm">
+            Your account does not have access to the AI manufacturing assistant.
+            Contact an administrator to enable this feature.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   const handleSend = async () => {
     const text = input.trim();

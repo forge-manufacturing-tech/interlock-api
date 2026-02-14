@@ -8,6 +8,7 @@ import type { TokenResponse } from '../models/TokenResponse';
 import type { UserCreate } from '../models/UserCreate';
 import type { UserLogin } from '../models/UserLogin';
 import type { UserRead } from '../models/UserRead';
+import type { UserUpdate } from '../models/UserUpdate';
 import type { CancelablePromise } from '../core/CancelablePromise';
 import { OpenAPI } from '../core/OpenAPI';
 import { request as __request } from '../core/request';
@@ -106,6 +107,41 @@ export class AuthenticationService {
             path: {
                 'key_id': keyId,
             },
+            errors: {
+                422: `Validation Error`,
+            },
+        });
+    }
+    /**
+     * List Users
+     * @returns UserRead Successful Response
+     * @throws ApiError
+     */
+    public static listUsersAuthAdminUsersGet(): CancelablePromise<Array<UserRead>> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/auth/admin/users',
+        });
+    }
+    /**
+     * Update User
+     * @param userId
+     * @param requestBody
+     * @returns UserRead Successful Response
+     * @throws ApiError
+     */
+    public static updateUserAuthAdminUsersUserIdPatch(
+        userId: string,
+        requestBody: UserUpdate,
+    ): CancelablePromise<UserRead> {
+        return __request(OpenAPI, {
+            method: 'PATCH',
+            url: '/auth/admin/users/{user_id}',
+            path: {
+                'user_id': userId,
+            },
+            body: requestBody,
+            mediaType: 'application/json',
             errors: {
                 422: `Validation Error`,
             },

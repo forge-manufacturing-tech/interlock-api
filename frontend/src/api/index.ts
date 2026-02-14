@@ -18,6 +18,7 @@ export type { TokenResponse } from './models/TokenResponse';
 export type { UserCreate } from './models/UserCreate';
 export type { UserLogin } from './models/UserLogin';
 export type { UserRead } from './models/UserRead';
+export type { UserUpdate } from './models/UserUpdate';
 export type { ValidationError } from './models/ValidationError';
 
 export { AuthenticationService } from './services/AuthenticationService';
