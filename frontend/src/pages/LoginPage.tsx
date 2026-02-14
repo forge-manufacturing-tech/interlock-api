@@ -28,43 +28,67 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen bg-surface">
       <Navbar />
-      <div className="flex min-h-screen items-center justify-center pt-14">
-        <form
-          onSubmit={handleSubmit}
-          className="w-full max-w-sm space-y-4 rounded-lg border border-border bg-surface-light p-8"
-        >
-          <h2 className="font-mono text-xl font-bold text-text-primary">Log In</h2>
-          {error && <p className="text-sm text-red-500">{error}</p>}
-          <input
-            type="email"
-            placeholder="Email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-            className="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-text-primary placeholder-text-muted outline-none focus:border-primary"
-          />
-          <input
-            type="password"
-            placeholder="Password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-            className="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-text-primary placeholder-text-muted outline-none focus:border-primary"
-          />
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full rounded-md bg-primary px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary/90 disabled:opacity-50"
+      <div className="flex min-h-screen items-center justify-center px-4 pt-14">
+        <div className="w-full max-w-md">
+          <form
+            onSubmit={handleSubmit}
+            className="rounded-md border border-border bg-surface-light p-8 space-y-6"
           >
-            {loading ? "Logging in..." : "Log In"}
-          </button>
-          <p className="text-center text-sm text-text-muted">
-            Don't have an account?{" "}
-            <Link to="/signup" className="text-primary hover:underline">
-              Sign up
-            </Link>
-          </p>
-        </form>
+            <h2 className="font-mono text-2xl font-bold uppercase tracking-wider text-text-primary text-center">
+              Sign in to Interlock
+            </h2>
+
+            {error && (
+              <div className="rounded-md border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-400">
+                {error}
+              </div>
+            )}
+
+            <div className="space-y-4">
+              <div>
+                <label className="mb-1.5 block text-sm font-medium text-text-secondary">
+                  Email
+                </label>
+                <input
+                  type="email"
+                  placeholder="you@example.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                  className="w-full rounded-md border border-border bg-surface px-4 py-2.5 text-text-primary placeholder-text-muted outline-none focus:border-primary"
+                />
+              </div>
+              <div>
+                <label className="mb-1.5 block text-sm font-medium text-text-secondary">
+                  Password
+                </label>
+                <input
+                  type="password"
+                  placeholder="••••••••"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  className="w-full rounded-md border border-border bg-surface px-4 py-2.5 text-text-primary placeholder-text-muted outline-none focus:border-primary"
+                />
+              </div>
+            </div>
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full rounded-md bg-primary px-4 py-2.5 font-mono text-sm font-medium uppercase tracking-wider text-white transition-colors hover:bg-primary/90 disabled:opacity-50"
+            >
+              {loading ? "Signing in..." : "SIGN IN"}
+            </button>
+
+            <p className="text-center text-sm text-text-muted">
+              Don't have an account?{" "}
+              <Link to="/signup" className="text-primary hover:underline">
+                Get started
+              </Link>
+            </p>
+          </form>
+        </div>
       </div>
     </div>
   );
