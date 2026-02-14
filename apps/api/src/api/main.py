@@ -30,11 +30,17 @@ app.add_middleware(
 
 app.include_router(auth_router)
 
-STATIC_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "..", "..", "frontend", "dist")
+_WORKSPACE = os.environ.get("REPL_HOME", "/home/runner/workspace")
+STATIC_DIR = os.path.join(_WORKSPACE, "frontend", "dist")
 
 
 @app.get("/")
 def read_root():
+    if os.path.isdir(STATIC_DIR):
+        from starlette.responses import FileResponse
+        index = os.path.join(STATIC_DIR, "index.html")
+        if os.path.isfile(index):
+            return FileResponse(index)
     return {"system": "Interlock OS", "status": "online"}
 
 
