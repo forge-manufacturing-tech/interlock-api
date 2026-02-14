@@ -7,7 +7,7 @@ A Python monorepo for managing manufacturing graphs, parts, and bill of material
 - **Backend**: FastAPI API server (`apps/api`) running on port 8000
 - **Frontend**: React + Vite + TypeScript app (`frontend/`) running on port 5000, proxies API requests to backend
 - **Database**: SQLite (file-based, configured via `DB_PATH` env var, default `./data/interlock.db`)
-- **AI Agent**: LangChain-based agent using Google Gemini (`packages/ai`)
+- **AI Agent**: LangChain-based agent using OpenAI via Replit AI Integrations (`packages/ai`), supports multimodal inputs (PDF, images)
 - **Auth**: JWT-based authentication with API key support (`packages/auth`)
 
 ## Project Structure
@@ -24,7 +24,7 @@ A Python monorepo for managing manufacturing graphs, parts, and bill of material
 │   ├── openapi.json     # OpenAPI spec (source for code generation)
 │   └── vite.config.ts   # Vite config with API proxy
 ├── packages/
-│   ├── ai/              # AI agent logic (LangChain + Gemini)
+│   ├── ai/              # AI agent logic (LangChain + OpenAI via Replit AI)
 │   ├── auth/            # Authentication (JWT, API keys, user management)
 │   ├── core/            # Core shared utilities
 │   ├── database/        # SQLite database manager
@@ -89,6 +89,8 @@ The workflow runs both backend and frontend:
 - **Inspired by**: https://interlock-systems.netlify.app
 
 ## Recent Changes
+- 2026-02-14: Added multimodal chat - agent accepts PDF uploads (text extraction via PyMuPDF) and images (analyzed via OpenAI vision), tree export as CSV BOM and markdown work instructions
+- 2026-02-14: Switched AI agent from Google Gemini to Replit AI Integrations (OpenAI-compatible, gpt-5/gpt-5-mini)
 - 2026-02-14: Replaced Streamlit frontend with React + Vite + TypeScript app, auto-generated API client from OpenAPI, added landing page, dashboard with parts/trees/BOM/agent/API keys pages
 - 2026-02-14: Added authentication system - user signup/login with JWT, API key management, protected API routes
 - 2026-02-14: Initial Replit setup - restructured apps/api to src layout, installed graphviz system dependency
