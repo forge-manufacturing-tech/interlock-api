@@ -24,7 +24,6 @@ dev = [
     "api",
     "database",
     "orm",
-    "frontend",
     "auth",
 ]
 
@@ -36,7 +35,6 @@ api = { workspace = true }
 deploy-gcp = { workspace = true }
 database = { workspace = true }
 orm = { workspace = true }
-frontend = { workspace = true }
 auth = { workspace = true }
 
 [tool.ruff]

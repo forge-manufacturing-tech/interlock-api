@@ -34,7 +34,7 @@ outputType = "webview"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "cd /home/runner/workspace/frontend && npm run dev"
+args = "bash -c \"cd /home/runner/workspace && uv run uvicorn api.main:app --host 127.0.0.1 --port 8000 & cd /home/runner/workspace/frontend && npm run dev\""
 waitForPort = 5000
 
 [[ports]]

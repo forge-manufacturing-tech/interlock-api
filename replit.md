@@ -1,11 +1,11 @@
 # Interlock API - Manufacturing Graph Intelligence
 
 ## Overview
-A Python monorepo for managing manufacturing graphs, parts, and bill of materials (BOM). The system provides an AI-powered agent for querying and modifying the manufacturing graph, along with a web-based frontend for visualization and data management. Includes user authentication with JWT tokens and API key management for programmatic access.
+A Python monorepo for managing manufacturing graphs, parts, and bill of materials (BOM). The system provides an AI-powered agent for querying and modifying the manufacturing graph, along with a modern React frontend for visualization and data management. Includes user authentication with JWT tokens and API key management for programmatic access.
 
 ## Architecture
 - **Backend**: FastAPI API server (`apps/api`) running on port 8000
-- **Frontend**: Streamlit app (`packages/frontend`) running on port 5000
+- **Frontend**: React + Vite + TypeScript app (`frontend/`) running on port 5000, proxies API requests to backend
 - **Database**: SQLite (file-based, configured via `DB_PATH` env var, default `./data/interlock.db`)
 - **AI Agent**: LangChain-based agent using Google Gemini (`packages/ai`)
 - **Auth**: JWT-based authentication with API key support (`packages/auth`)
@@ -15,12 +15,19 @@ A Python monorepo for managing manufacturing graphs, parts, and bill of material
 ├── apps/
 │   └── api/             # FastAPI backend API
 │       └── src/api/     # API source (main.py, logging_config.py)
+├── frontend/            # React + Vite + TypeScript frontend
+│   ├── src/
+│   │   ├── api/         # Auto-generated TypeScript API client (from OpenAPI)
+│   │   ├── components/  # Reusable components (Navbar, DashboardLayout)
+│   │   ├── lib/         # Auth context provider
+│   │   └── pages/       # Page components (Landing, Login, Dashboard pages)
+│   ├── openapi.json     # OpenAPI spec (source for code generation)
+│   └── vite.config.ts   # Vite config with API proxy
 ├── packages/
 │   ├── ai/              # AI agent logic (LangChain + Gemini)
 │   ├── auth/            # Authentication (JWT, API keys, user management)
 │   ├── core/            # Core shared utilities
 │   ├── database/        # SQLite database manager
-│   ├── frontend/        # Streamlit web frontend
 │   ├── models/          # Pydantic data models
 │   ├── orm/             # CRUD repository for manufacturing graph
 │   └── parsers/         # BOM file parsers (Excel, DXF, etc.)
@@ -29,10 +36,13 @@ A Python monorepo for managing manufacturing graphs, parts, and bill of material
 ```
 
 ## Tech Stack
-- **Language**: Python 3.12
-- **Package Manager**: uv (workspace mode)
+- **Language**: Python 3.12 (backend), TypeScript (frontend)
+- **Package Manager**: uv (workspace mode, backend), npm (frontend)
 - **Backend Framework**: FastAPI + Uvicorn
-- **Frontend Framework**: Streamlit
+- **Frontend Framework**: React + Vite + Tailwind CSS v4
+- **API Client**: Auto-generated from OpenAPI spec using openapi-typescript-codegen
+- **State Management**: React Query (@tanstack/react-query), React Context (auth)
+- **Routing**: React Router v6
 - **Database**: SQLite
 - **AI**: LangChain, LangGraph, Google Gemini
 - **Auth**: bcrypt (password hashing), PyJWT (tokens)
@@ -44,7 +54,7 @@ A Python monorepo for managing manufacturing graphs, parts, and bill of material
 - `JWT_EXP_MINUTES`: JWT token expiry in minutes (default: 1440 = 24 hours)
 
 ## Authentication
-- **Web UI**: Users sign up/login via the Streamlit frontend; JWT stored in session state
+- **Web UI**: Users sign up/login via the React frontend; JWT stored in localStorage
 - **API Access**: Two methods supported:
   - Bearer token: `Authorization: Bearer <jwt_token>`
   - API key: `x-api-key: <api_key>` header
@@ -58,11 +68,26 @@ A Python monorepo for managing manufacturing graphs, parts, and bill of material
   - `DELETE /auth/api-keys/{key_id}` - Revoke API key
 - All other API endpoints require authentication
 
+## Frontend API Client Generation
+The TypeScript API client is auto-generated from the backend's OpenAPI spec:
+```bash
+cd frontend
+curl -s http://127.0.0.1:8000/openapi.json > openapi.json
+npx openapi-typescript-codegen --input openapi.json --output src/api --client fetch
+```
+
 ## Running the Application
 The workflow runs both backend and frontend:
 - Backend: `uv run uvicorn api.main:app --host 127.0.0.1 --port 8000`
-- Frontend: `uv run streamlit run packages/frontend/src/frontend/main.py` (port 5000)
+- Frontend: `cd frontend && npm run dev` (Vite dev server on port 5000, proxies `/api` to backend)
+
+## Design System
+- **Theme**: Dark mode with orange (#EC5B13) primary accent
+- **Fonts**: JetBrains Mono (headings/monospace), Inter (body)
+- **Background**: #09090B (surface), #18181B (panels), #27272A (borders)
+- **Inspired by**: https://interlock-systems.netlify.app
 
 ## Recent Changes
-- 2026-02-14: Added authentication system - user signup/login with JWT, API key management, protected API routes, Streamlit auth UI
-- 2026-02-14: Initial Replit setup - restructured apps/api to src layout, configured Streamlit for Replit proxy, installed graphviz system dependency
+- 2026-02-14: Replaced Streamlit frontend with React + Vite + TypeScript app, auto-generated API client from OpenAPI, added landing page, dashboard with parts/trees/BOM/agent/API keys pages
+- 2026-02-14: Added authentication system - user signup/login with JWT, API key management, protected API routes
+- 2026-02-14: Initial Replit setup - restructured apps/api to src layout, installed graphviz system dependency

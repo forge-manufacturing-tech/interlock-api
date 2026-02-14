@@ -17,3 +17,8 @@ data/
 *.tfplan
 terraform.tfvars
 .terraform.lock.hcl
+
+# Node.js
+node_modules/
+dist/
+.cache/
