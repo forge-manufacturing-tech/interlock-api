@@ -48,3 +48,13 @@ class ApiKeyRead(BaseModel):
 class UserUpdate(BaseModel):
     ai_enabled: bool | None = None
     role: str | None = None
+
+
+class SystemSettings(BaseModel):
+    signup_enabled: bool = True
+    new_users_are_admin: bool = True
+
+
+class SystemSettingUpdate(BaseModel):
+    key: str
+    value: bool

@@ -14,6 +14,8 @@ export type { Body_ingest_bom_ingest_bom_post } from './models/Body_ingest_bom_i
 export type { HTTPValidationError } from './models/HTTPValidationError';
 export { NodeStatus } from './models/NodeStatus';
 export type { PartNode } from './models/PartNode';
+export type { SystemSettings } from './models/SystemSettings';
+export type { SystemSettingUpdate } from './models/SystemSettingUpdate';
 export type { TokenResponse } from './models/TokenResponse';
 export type { UserCreate } from './models/UserCreate';
 export type { UserLogin } from './models/UserLogin';

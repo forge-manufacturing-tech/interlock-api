@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "../lib/auth";
+import { AuthenticationService } from "../api";
 import Navbar from "../components/Navbar";
 
 export default function SignupPage() {
@@ -13,9 +15,21 @@ export default function SignupPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
+  const { data: settings, isLoading: settingsLoading } = useQuery({
+    queryKey: ["system-settings"],
+    queryFn: () => AuthenticationService.getSystemSettingsAuthSettingsGet(),
+  });
+
+  const signupDisabled = settings && !settings.signup_enabled;
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
+
+    if (signupDisabled) {
+      setError("Signups are currently disabled by an administrator.");
+      return;
+    }
 
     if (password.length < 6) {
       setError("Password must be at least 6 characters");
@@ -37,6 +51,43 @@ export default function SignupPage() {
       setLoading(false);
     }
   };
+
+  if (settingsLoading) {
+    return (
+      <div className="min-h-screen bg-surface">
+        <Navbar />
+        <div className="flex min-h-screen items-center justify-center">
+          <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+        </div>
+      </div>
+    );
+  }
+
+  if (signupDisabled) {
+    return (
+      <div className="min-h-screen bg-surface">
+        <Navbar />
+        <div className="flex min-h-screen items-center justify-center px-4 pt-14">
+          <div className="w-full max-w-md">
+            <div className="rounded-md border border-border bg-surface-light p-8 space-y-6 text-center">
+              <h2 className="font-mono text-2xl font-bold uppercase tracking-wider text-text-primary">
+                Signups Disabled
+              </h2>
+              <p className="text-text-secondary">
+                New account registration is currently disabled. Contact an administrator for access.
+              </p>
+              <p className="text-sm text-text-muted">
+                Already have an account?{" "}
+                <Link to="/login" className="text-primary hover:underline">
+                  Sign in
+                </Link>
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-surface">

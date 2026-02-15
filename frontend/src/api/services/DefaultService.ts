@@ -180,4 +180,24 @@ export class DefaultService {
             },
         });
     }
+    /**
+     * Serve Spa
+     * @param fullPath
+     * @returns any Successful Response
+     * @throws ApiError
+     */
+    public static serveSpaFullPathGet(
+        fullPath: string,
+    ): CancelablePromise<any> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/{full_path}',
+            path: {
+                'full_path': fullPath,
+            },
+            errors: {
+                422: `Validation Error`,
+            },
+        });
+    }
 }

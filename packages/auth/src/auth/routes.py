@@ -5,7 +5,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from .dependencies import get_current_user, require_admin, _get_auth_repo
-from .models import ApiKeyCreate, ApiKeyRead, TokenResponse, UserCreate, UserLogin, UserRead, UserUpdate
+from .models import ApiKeyCreate, ApiKeyRead, SystemSettings, SystemSettingUpdate, TokenResponse, UserCreate, UserLogin, UserRead, UserUpdate
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
@@ -109,3 +109,22 @@ async def update_user(
     if not updated:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
     return UserRead(**updated)
+
+
+@router.get("/settings", response_model=SystemSettings)
+async def get_system_settings():
+    repo = _get_repo()
+    return SystemSettings(**repo.get_system_settings())
+
+
+@router.patch("/admin/settings", response_model=SystemSettings)
+async def update_system_setting(
+    data: SystemSettingUpdate,
+    current_user: dict = Depends(require_admin),
+):
+    repo = _get_repo()
+    try:
+        updated = repo.update_system_setting(data.key, data.value)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
+    return SystemSettings(**updated)

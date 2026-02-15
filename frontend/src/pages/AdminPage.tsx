@@ -1,8 +1,7 @@
-import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { AuthenticationService } from "../api";
 import type { UserRead, UserUpdate } from "../api";
-import { Shield, Bot, ShieldOff } from "lucide-react";
+import { Shield, Bot, ShieldOff, UserPlus, Users } from "lucide-react";
 import { useAuth } from "../lib/auth";
 
 export default function AdminPage() {
@@ -14,11 +13,24 @@ export default function AdminPage() {
     queryFn: () => AuthenticationService.listUsersAuthAdminUsersGet(),
   });
 
+  const { data: settings } = useQuery({
+    queryKey: ["system-settings"],
+    queryFn: () => AuthenticationService.getSystemSettingsAuthSettingsGet(),
+  });
+
   const updateMutation = useMutation({
     mutationFn: ({ userId, data }: { userId: string; data: UserUpdate }) =>
       AuthenticationService.updateUserAuthAdminUsersUserIdPatch(userId, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin-users"] });
+    },
+  });
+
+  const settingsMutation = useMutation({
+    mutationFn: (data: { key: string; value: boolean }) =>
+      AuthenticationService.updateSystemSettingAuthAdminSettingsPatch(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["system-settings"] });
     },
   });
 
@@ -36,6 +48,10 @@ export default function AdminPage() {
     });
   };
 
+  const toggleSetting = (key: string, currentValue: boolean | undefined) => {
+    settingsMutation.mutate({ key, value: !(currentValue ?? true) });
+  };
+
   return (
     <div className="space-y-6">
       <div>
@@ -43,9 +59,63 @@ export default function AdminPage() {
           User Management
         </h1>
         <p className="mt-1 text-text-secondary">
-          Manage user roles and AI access permissions.
+          Manage user roles, AI access, and system-wide signup settings.
         </p>
       </div>
+
+      {settings && (
+        <div className="rounded-md border border-border bg-surface-light p-5 space-y-4">
+          <h2 className="font-mono text-sm font-semibold uppercase tracking-wider text-text-secondary">
+            System Settings
+          </h2>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="flex items-center justify-between rounded-md border border-border bg-surface px-4 py-3">
+              <div className="flex items-center gap-3">
+                <UserPlus className="h-5 w-5 text-text-muted" />
+                <div>
+                  <p className="text-sm font-medium text-text-primary">Open Signups</p>
+                  <p className="text-xs text-text-muted">Allow new users to create accounts</p>
+                </div>
+              </div>
+              <button
+                onClick={() => toggleSetting("signup_enabled", settings.signup_enabled)}
+                disabled={settingsMutation.isPending}
+                className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none disabled:opacity-50 ${
+                  settings.signup_enabled ? "bg-primary" : "bg-zinc-600"
+                }`}
+              >
+                <span
+                  className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow transition duration-200 ${
+                    settings.signup_enabled ? "translate-x-5" : "translate-x-0"
+                  }`}
+                />
+              </button>
+            </div>
+            <div className="flex items-center justify-between rounded-md border border-border bg-surface px-4 py-3">
+              <div className="flex items-center gap-3">
+                <Users className="h-5 w-5 text-text-muted" />
+                <div>
+                  <p className="text-sm font-medium text-text-primary">New Users Are Admin</p>
+                  <p className="text-xs text-text-muted">Grant admin role to all new signups</p>
+                </div>
+              </div>
+              <button
+                onClick={() => toggleSetting("new_users_are_admin", settings.new_users_are_admin)}
+                disabled={settingsMutation.isPending}
+                className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none disabled:opacity-50 ${
+                  settings.new_users_are_admin ? "bg-primary" : "bg-zinc-600"
+                }`}
+              >
+                <span
+                  className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow transition duration-200 ${
+                    settings.new_users_are_admin ? "translate-x-5" : "translate-x-0"
+                  }`}
+                />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="rounded-md border border-border bg-surface-light">
         {isLoading ? (

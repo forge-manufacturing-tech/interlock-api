@@ -4,6 +4,8 @@
 /* eslint-disable */
 import type { ApiKeyCreate } from '../models/ApiKeyCreate';
 import type { ApiKeyRead } from '../models/ApiKeyRead';
+import type { SystemSettings } from '../models/SystemSettings';
+import type { SystemSettingUpdate } from '../models/SystemSettingUpdate';
 import type { TokenResponse } from '../models/TokenResponse';
 import type { UserCreate } from '../models/UserCreate';
 import type { UserLogin } from '../models/UserLogin';
@@ -140,6 +142,36 @@ export class AuthenticationService {
             path: {
                 'user_id': userId,
             },
+            body: requestBody,
+            mediaType: 'application/json',
+            errors: {
+                422: `Validation Error`,
+            },
+        });
+    }
+    /**
+     * Get System Settings
+     * @returns SystemSettings Successful Response
+     * @throws ApiError
+     */
+    public static getSystemSettingsAuthSettingsGet(): CancelablePromise<SystemSettings> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/auth/settings',
+        });
+    }
+    /**
+     * Update System Setting
+     * @param requestBody
+     * @returns SystemSettings Successful Response
+     * @throws ApiError
+     */
+    public static updateSystemSettingAuthAdminSettingsPatch(
+        requestBody: SystemSettingUpdate,
+    ): CancelablePromise<SystemSettings> {
+        return __request(OpenAPI, {
+            method: 'PATCH',
+            url: '/auth/admin/settings',
             body: requestBody,
             mediaType: 'application/json',
             errors: {

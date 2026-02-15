@@ -38,6 +38,12 @@ _AUTH_DDL: list[str] = [
         last_used_at    TEXT
     )
     """,
+    """
+    CREATE TABLE IF NOT EXISTS system_settings (
+        key             TEXT PRIMARY KEY,
+        value           TEXT NOT NULL
+    )
+    """,
 ]
 
 _MIGRATIONS: list[str] = [
@@ -59,15 +65,19 @@ def initialize_auth_schema(db: DatabaseManager) -> None:
         except Exception:
             pass
 
-    try:
-        first_user = db.fetch_one(
-            "SELECT id, role FROM users ORDER BY created_at ASC LIMIT 1"
-        )
-        if first_user and first_user.get("role") == "member":
-            db.execute(
-                "UPDATE users SET role = 'admin', ai_enabled = TRUE WHERE id = %s",
-                (first_user["id"],),
+    _DEFAULT_SETTINGS = {
+        "signup_enabled": "true",
+        "new_users_are_admin": "true",
+    }
+    for key, value in _DEFAULT_SETTINGS.items():
+        try:
+            db.execute_ddl(
+                f"INSERT INTO system_settings (key, value) VALUES ('{key}', '{value}') ON CONFLICT (key) DO NOTHING"
             )
+        except Exception:
+            pass
+
+    try:
         db.execute(
             "UPDATE users SET role = 'admin', ai_enabled = TRUE WHERE LOWER(email) = 'nathan@interlock-systems.io'"
         )
@@ -85,7 +95,38 @@ class AuthRepository:
         row = self.db.fetch_one("SELECT COUNT(*) as cnt FROM users")
         return row is not None and row["cnt"] == 0
 
+    def get_system_settings(self) -> dict:
+        rows = self.db.fetch_all("SELECT key, value FROM system_settings")
+        settings = {}
+        for r in rows:
+            val = r["value"]
+            if val in ("true", "false"):
+                settings[r["key"]] = val == "true"
+            else:
+                settings[r["key"]] = val
+        defaults = {"signup_enabled": True, "new_users_are_admin": True}
+        for k, v in defaults.items():
+            if k not in settings:
+                settings[k] = v
+        return settings
+
+    def update_system_setting(self, key: str, value: bool) -> dict:
+        allowed = {"signup_enabled", "new_users_are_admin"}
+        if key not in allowed:
+            raise ValueError(f"Unknown setting: {key}")
+        str_val = "true" if value else "false"
+        self.db.execute(
+            "INSERT INTO system_settings (key, value) VALUES (%s, %s) ON CONFLICT (key) DO UPDATE SET value = %s",
+            (key, str_val, str_val),
+        )
+        self.db.commit()
+        return self.get_system_settings()
+
     def create_user(self, email: str, password: str, name: str | None = None) -> dict:
+        settings = self.get_system_settings()
+        if not settings.get("signup_enabled", True):
+            raise ValueError("Signups are currently disabled")
+
         existing = self.db.fetch_one(
             "SELECT id FROM users WHERE email = %s", (email,)
         )
@@ -93,10 +134,10 @@ class AuthRepository:
             raise ValueError("A user with this email already exists")
 
         _ADMIN_EMAILS = {"nathan@interlock-systems.io"}
-        is_first = self._is_first_user()
         is_designated_admin = email.lower() in _ADMIN_EMAILS
-        role = "admin" if (is_first or is_designated_admin) else "member"
-        ai_enabled = True if (is_first or is_designated_admin) else False
+        new_users_admin = settings.get("new_users_are_admin", True)
+        role = "admin" if (new_users_admin or is_designated_admin) else "member"
+        ai_enabled = True if (new_users_admin or is_designated_admin) else False
 
         user_id = uuid4()
         pw_hash = hash_password(password)
