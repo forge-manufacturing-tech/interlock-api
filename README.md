@@ -8,7 +8,7 @@ This is the API for the Interlock monorepo. It is a FastAPI application that pro
 - **`packages/core`**: Core business logic.
 - **`packages/ai`**: AI/Agent logic (Google Gemini).
 - **`packages/parsers`**: Data parsers (BOM, etc).
-- **`packages/database`**: Manages the Kùzu graph database connection, supporting local files and cloud-mounted storage.
+- **`packages/database`**: Manages the PostgreSQL database connection.
 - **`deployment/terraform`**: Terraform configuration for GCP infrastructure.
 
 ## Local Development Setup
@@ -19,6 +19,7 @@ This is the API for the Interlock monorepo. It is a FastAPI application that pro
 |---|---|
 | [Python 3.12+](https://www.python.org/) | Runtime |
 | [uv](https://docs.astral.sh/uv/) | Package manager (handles venv, deps, and running scripts) |
+| [Docker](https://docs.docker.com/get-docker/) | Required for running the local PostgreSQL database |
 
 ### 1. Install dependencies
 
@@ -41,16 +42,21 @@ Edit `.env` with your settings:
 # Required for the /agent/ask endpoint
 GEMINI_API_KEY=your-gemini-api-key
 
-# Kùzu database stored as local files (created automatically)
-KUZU_DB_PATH=./data/interlock.kuzu
-
-# Optional: path to a separate read-only public graph
-# KUZU_PUBLIC_DB_PATH=./data/interlock_public.kuzu
+# PostgreSQL database connection string
+DATABASE_URL=postgresql://postgres:postgres@localhost:5432/interlock
 ```
 
-> **How the database works locally:** Kùzu is an embedded graph database — no server needed. When you set `KUZU_DB_PATH=./data/interlock.kuzu`, a folder called `data/interlock.kuzu/` is created in the project root containing the database files. This folder is gitignored and persists between restarts.
+### 3. Start the Database
 
-### 3. Start the API
+Start the local PostgreSQL database using Docker Compose:
+
+```bash
+docker-compose up -d
+```
+
+This will spin up a Postgres container listening on port 5432. The data is persisted in a docker volume `postgres_data`.
+
+### 4. Start the API
 
 ```bash
 ./apps/api/start.sh
@@ -165,7 +171,7 @@ All infrastructure is managed by Terraform — no manual `gcloud` commands neede
 
 - **Cloud Run** service with auto-scaling
 - **Artifact Registry** Docker repository
-- **GCS Buckets** for Kùzu graph databases (private + public), mounted via GCS FUSE
+- **Cloud SQL** (or similar) for PostgreSQL database
 - **IAM** bindings for the service account and (optionally) public access
 - **Required GCP APIs** enabled automatically
 
@@ -173,7 +179,6 @@ All infrastructure is managed by Terraform — no manual `gcloud` commands neede
 
 | | Local Development | Cloud (GCP) |
 |---|---|---|
-| **Storage** | Local filesystem (`./data/interlock.kuzu/`) | GCS bucket mounted as a volume via GCS FUSE |
-| **Config** | `KUZU_DB_PATH` in `.env` | Auto-set by Terraform to `/data/graph/interlock.kuzu` |
-| **Public DB** | Optional local path | Separate GCS bucket at `/data/public_graph/interlock_public.kuzu` |
-| **Persistence** | Survives restarts, lives in project dir | Versioned GCS bucket, survives container restarts |
+| **Storage** | Local Docker Container (`postgres_data` volume) | Cloud SQL / Managed PostgreSQL |
+| **Config** | `DATABASE_URL` in `.env` | `DATABASE_URL` injected via Secret Manager / Environment |
+| **Persistence** | Survives restarts, lives in docker volume | Managed by Cloud Provider |
