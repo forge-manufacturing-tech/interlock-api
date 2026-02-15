@@ -1,7 +1,17 @@
 import { Link } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
+import { AuthenticationService } from "../api";
 import Navbar from "@/components/Navbar";
 
 export default function LandingPage() {
+  const { data: settings } = useQuery({
+    queryKey: ["system-settings"],
+    queryFn: () => AuthenticationService.getSystemSettingsAuthSettingsGet(),
+    staleTime: 60000,
+  });
+
+  const signupEnabled = settings?.signup_enabled !== false;
+
   return (
     <div className="min-h-screen bg-surface">
       <Navbar />
@@ -32,12 +42,21 @@ export default function LandingPage() {
           </p>
 
           <div className="mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row">
-            <Link
-              to="/signup"
-              className="rounded-md bg-primary px-8 py-3 font-mono text-sm font-semibold uppercase tracking-wider text-white no-underline transition-colors hover:bg-primary/90"
-            >
-              INITIALIZE TRANSFER
-            </Link>
+            {signupEnabled ? (
+              <Link
+                to="/signup"
+                className="rounded-md bg-primary px-8 py-3 font-mono text-sm font-semibold uppercase tracking-wider text-white no-underline transition-colors hover:bg-primary/90"
+              >
+                INITIALIZE TRANSFER
+              </Link>
+            ) : (
+              <Link
+                to="/login"
+                className="rounded-md bg-primary px-8 py-3 font-mono text-sm font-semibold uppercase tracking-wider text-white no-underline transition-colors hover:bg-primary/90"
+              >
+                SIGN IN
+              </Link>
+            )}
             <a
               href="#how-it-works"
               className="rounded-md border border-border px-8 py-3 font-mono text-sm font-semibold uppercase tracking-wider text-text-primary no-underline transition-colors hover:border-text-muted"
@@ -139,12 +158,21 @@ export default function LandingPage() {
           <p className="mt-4 text-lg text-text-secondary">
             Stop interpreting. Start manufacturing.
           </p>
-          <Link
-            to="/signup"
-            className="mt-8 inline-block rounded-md bg-primary px-8 py-3 font-mono text-sm font-semibold uppercase tracking-wider text-white no-underline transition-colors hover:bg-primary/90"
-          >
-            INITIALIZE TRANSFER
-          </Link>
+          {signupEnabled ? (
+            <Link
+              to="/signup"
+              className="mt-8 inline-block rounded-md bg-primary px-8 py-3 font-mono text-sm font-semibold uppercase tracking-wider text-white no-underline transition-colors hover:bg-primary/90"
+            >
+              INITIALIZE TRANSFER
+            </Link>
+          ) : (
+            <Link
+              to="/login"
+              className="mt-8 inline-block rounded-md bg-primary px-8 py-3 font-mono text-sm font-semibold uppercase tracking-wider text-white no-underline transition-colors hover:bg-primary/90"
+            >
+              SIGN IN
+            </Link>
+          )}
         </div>
       </section>
 

@@ -30,6 +30,13 @@ app.add_middleware(
 
 app.include_router(auth_router)
 
+
+@app.middleware("http")
+async def strip_api_prefix(request, call_next):
+    if request.url.path.startswith("/api/"):
+        request.scope["path"] = request.url.path[4:]
+    return await call_next(request)
+
 _WORKSPACE = os.environ.get("REPL_HOME", "/home/runner/workspace")
 STATIC_DIR = os.path.join(_WORKSPACE, "frontend", "dist")
 
