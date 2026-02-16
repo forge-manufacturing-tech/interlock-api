@@ -3,7 +3,8 @@ import react from "@vitejs/plugin-react";
 import path from "path";
 import { defineConfig } from "vite";
 
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
+  base: mode === "production" ? "/interlock-api/" : "/",
   plugins: [react(), tailwindcss()],
   resolve: {
     alias: {
@@ -23,4 +24,4 @@ export default defineConfig({
       },
     },
   },
-});
+}));
