@@ -25,9 +25,6 @@ export default function LandingPage() {
         </div>
 
         <div className="relative z-10 mx-auto max-w-6xl text-center">
-          <span className="mb-8 inline-block rounded-full border border-primary px-4 py-1.5 font-mono text-xs uppercase tracking-widest text-primary">
-            THE SOFTWARE-ENABLED SOLUTION
-          </span>
 
           <h1 className="font-mono text-6xl font-bold uppercase leading-none text-text-primary md:text-8xl">
             ACCELERATE TECH TRANSFER
