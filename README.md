@@ -59,7 +59,7 @@ This will spin up a Postgres container listening on port 5432. The data is persi
 ### 4. Start the API
 
 ```bash
-./apps/api/start.sh
+uv run --package api uvicorn api.main:app --reload --env-file .env
 ```
 
 The API will be available at **http://127.0.0.1:8000**:
@@ -122,63 +122,39 @@ This project handles Python tooling via `uv`. For the best experience in VS Code
     Simply open the project in VS Code / Cursor and accept the recommended extensions.
 
 
-## Deployment
+## Deployment (Static Site)
 
-Deployment is **idempotent** and managed by [Terraform](https://www.terraform.io/). Running `./deploy.sh` multiple times is always safe — it will only create or update resources that differ from the desired state.
+The frontend is deployed automatically to GitHub Pages via a GitHub Action.
 
 ### Prerequisites
 
-| Tool | Purpose |
-|---|---|
-| [Google Cloud SDK](https://cloud.google.com/sdk/docs/install) | `gcloud` CLI, authentication |
-| [Terraform](https://developer.hashicorp.com/terraform/install) (>= 1.5) | Infrastructure-as-code |
-| [Docker](https://docs.docker.com/get-docker/) | Container builds |
-| uv | Already set up in this repo |
+1.  Go to your repository **Settings** > **Pages**.
+2.  Under **Build and deployment** > **Source**, select **GitHub Actions**.
+3.  The workflow `.github/workflows/deploy-static.yml` will automatically build and deploy the `frontend/` directory on every push to `main`.
 
-Authenticate with GCP:
-```bash
-gcloud auth login
-gcloud auth application-default login
-```
+### Workflow Details
 
-### Configure
+The [Deploy Static Content to Pages](.github/workflows/deploy-static.yml) workflow:
+1.  Triggers on push to `main` (only if `frontend/**` changes) or manual dispatch.
+2.  Builds the frontend using `npm run build`.
+3.  Uploads the `dist` folder as a GitHub Pages artifact.
+4.  Deploys the artifact to GitHub Pages.
 
-```bash
-# Copy the example and fill in your values
-cp deployment/terraform/terraform.tfvars.example \
-   deployment/terraform/terraform.tfvars
-```
+### Manual Trigger
 
-### Deploy
+You can also manually trigger the deployment from the **Actions** tab in GitHub by selecting the "Deploy Static Content to Pages" workflow and clicking **Run workflow**.
+
+## Running with Docker (Full Stack - Local)
+
+You can run the entire stack (Database, API, Frontend) using Docker Compose for local development:
 
 ```bash
-# Preview changes (dry-run)
-./deploy.sh --plan
-
-# Deploy with production secrets
-./deploy.sh --env-file .env.prod
-
-# Non-interactive deployment (CI/CD)
-./deploy.sh --env-file .env.prod --auto-approve
-
-# Tear down everything
-./deploy.sh --destroy
+# Build and start all services
+docker-compose up --build
 ```
 
-### What Gets Deployed
+This will spin up:
+- **Frontend**: http://localhost:5000
+- **API**: http://localhost:8000
+- **Database**: postgres:5432 (internal to docker network)
 
-All infrastructure is managed by Terraform — no manual `gcloud` commands needed:
-
-- **Cloud Run** service with auto-scaling
-- **Artifact Registry** Docker repository
-- **Cloud SQL** (or similar) for PostgreSQL database
-- **IAM** bindings for the service account and (optionally) public access
-- **Required GCP APIs** enabled automatically
-
-### Database: Local vs Cloud
-
-| | Local Development | Cloud (GCP) |
-|---|---|---|
-| **Storage** | Local Docker Container (`postgres_data` volume) | Cloud SQL / Managed PostgreSQL |
-| **Config** | `DATABASE_URL` in `.env` | `DATABASE_URL` injected via Secret Manager / Environment |
-| **Persistence** | Survives restarts, lives in docker volume | Managed by Cloud Provider |

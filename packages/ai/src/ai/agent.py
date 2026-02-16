@@ -12,7 +12,6 @@ Routes user intent into one of:
 
 from __future__ import annotations
 
-import os
 from dataclasses import asdict
 from typing import Literal
 from uuid import UUID, uuid4
@@ -764,24 +763,22 @@ REVIEWER FEEDBACK:
 
 
 def _get_llm():
-    from langchain_google_genai import ChatGoogleGenerativeAI
+    from langchain_openrouter import ChatOpenRouter
 
     # Standard model for quick tasks (e.g. classification, simple queries)
-    return ChatGoogleGenerativeAI(
-        model="gemini-2.0-flash-exp",
+    return ChatOpenRouter(
+        model="openai/gpt-oss-safeguard-20b:nitro",
         temperature=0.3,
-        google_api_key=os.getenv("GEMINI_API_KEY"),
     )
 
 
 def _get_strong_llm():
-    from langchain_google_genai import ChatGoogleGenerativeAI
+    from langchain_openrouter import ChatOpenRouter
 
     # Strong model for reasoning and complex tasks (e.g. manufacturing planning)
-    return ChatGoogleGenerativeAI(
-        model="gemini-2.0-flash-thinking-exp-01-21",
+    return ChatOpenRouter(
+        model="openai/gpt-oss-safeguard-20b:nitro",
         temperature=0.3,
-        google_api_key=os.getenv("GEMINI_API_KEY"),
     )
 
 

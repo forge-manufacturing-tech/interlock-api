@@ -28,10 +28,10 @@ The project uses `.env` files for configuration.
 
 To start the API with local variables:
 ```bash
-./apps/api/start.sh
+uv run --package api uvicorn api.main:app --reload --env-file .env
 ```
 
 To start the API with production variables (for testing):
 ```bash
-./apps/api/start.sh ./.env.prod
+uv run --package api uvicorn api.main:app --reload --env-file .env.prod
 ```
