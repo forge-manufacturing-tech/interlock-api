@@ -22,7 +22,7 @@ _AUTH_DDL: list[str] = [
         password_hash   TEXT NOT NULL,
         role            TEXT NOT NULL DEFAULT 'member',
         ai_enabled      BOOLEAN NOT NULL DEFAULT FALSE,
-        created_at      TEXT NOT NULL DEFAULT NOW()
+        created_at      TEXT NOT NULL DEFAULT NOW()::text
     )
     """,
     """
@@ -32,7 +32,7 @@ _AUTH_DDL: list[str] = [
         key_hash        TEXT NOT NULL UNIQUE,
         last4           TEXT NOT NULL,
         name            TEXT NOT NULL,
-        created_at      TEXT NOT NULL DEFAULT NOW(),
+        created_at      TEXT NOT NULL DEFAULT NOW()::text,
         revoked_at      TEXT,
         last_used_at    TEXT
     )
@@ -55,13 +55,15 @@ def initialize_auth_schema(db: DatabaseManager) -> None:
     for stmt in _AUTH_DDL:
         try:
             db.execute_ddl(stmt)
-        except Exception:
+        except Exception as e:
+            print(f"Auth DDL failed: {e}")
             pass
 
     for migration in _MIGRATIONS:
         try:
             db.execute_ddl(migration)
         except Exception:
+            # Migration might fail if column already exists, which is fine
             pass
 
     _DEFAULT_SETTINGS = {

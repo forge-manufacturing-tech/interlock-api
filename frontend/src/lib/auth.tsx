@@ -28,7 +28,6 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | null>(null);
 
 function configureApi(token: string | null) {
-  OpenAPI.BASE = "/api";
   OpenAPI.TOKEN = token ?? undefined;
 }
 
