@@ -110,11 +110,6 @@ export default function TreesPage() {
                 <p className="mt-1 text-xs text-text-muted truncate">
                   {root.description || "No description"}
                 </p>
-                {root.status && (
-                  <span className="mt-2 inline-block rounded-full bg-surface px-2 py-0.5 text-xs text-text-secondary">
-                    {root.status}
-                  </span>
-                )}
               </button>
             ))}
           </div>
