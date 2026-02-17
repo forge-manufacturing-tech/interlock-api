@@ -5,6 +5,8 @@ import psycopg2
 import psycopg2.extensions
 import psycopg2.extras
 from pydantic import BaseModel
+from sqlalchemy import Engine
+from sqlmodel import Session, create_engine
 
 
 class DatabaseConfig(BaseModel):
@@ -19,6 +21,7 @@ class DatabaseManager:
     def __init__(self, config: DatabaseConfig | None = None):
         self.config = config or self._load_config_from_env()
         self._conn: psycopg2.extensions.connection | None = None
+        self._engine: Engine = create_engine(self.config.database_url)
         self._initialize_database()
 
     def _load_config_from_env(self) -> DatabaseConfig:
@@ -43,6 +46,15 @@ class DatabaseManager:
         if self._conn is None or self._conn.closed:
             self._initialize_database()
         return self._conn
+
+    @property
+    def engine(self) -> Engine:
+        return self._engine
+
+    @property
+    def session(self) -> Session:
+        """Returns a new SQLModel Session."""
+        return Session(self._engine)
 
     def execute(
         self,

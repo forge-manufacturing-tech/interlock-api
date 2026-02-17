@@ -37,9 +37,8 @@ export default function DashboardLayout() {
       )}
 
       <aside
-        className={`fixed inset-y-0 left-0 z-40 flex w-60 flex-col border-r border-border bg-surface-light transition-transform lg:static lg:translate-x-0 ${
-          sidebarOpen ? "translate-x-0" : "-translate-x-full"
-        }`}
+        className={`fixed inset-y-0 left-0 z-40 flex w-60 flex-col border-r border-border bg-surface-light transition-transform lg:static lg:translate-x-0 ${sidebarOpen ? "translate-x-0" : "-translate-x-full"
+          }`}
       >
         <div className="flex h-14 items-center justify-between border-b border-border px-4">
           <span className="font-mono text-lg font-bold uppercase tracking-widest text-primary">
@@ -61,10 +60,9 @@ export default function DashboardLayout() {
               end={end}
               onClick={() => setSidebarOpen(false)}
               className={({ isActive }) =>
-                `flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors no-underline ${
-                  isActive
-                    ? "border-l-2 border-primary bg-white/5 text-primary"
-                    : "border-l-2 border-transparent text-text-secondary hover:bg-white/5 hover:text-text-primary"
+                `flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors no-underline ${isActive
+                  ? "border-l-2 border-primary bg-white/5 text-primary"
+                  : "border-l-2 border-transparent text-text-secondary hover:bg-white/5 hover:text-text-primary"
                 }`
               }
             >
@@ -84,7 +82,7 @@ export default function DashboardLayout() {
             <Menu size={20} />
           </button>
           <span className="hidden font-mono text-lg font-bold uppercase tracking-widest text-primary lg:block">
-            INTERLOCK
+            Dashboard
           </span>
           <div className="flex items-center gap-4">
             {isAdmin && (

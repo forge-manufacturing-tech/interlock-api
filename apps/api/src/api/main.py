@@ -17,6 +17,8 @@ from orm.main import get_part, get_tree_json, list_parts, list_root_parts
 from parsers.bom import parse_messy_bom
 from scalar_fastapi import get_scalar_api_reference
 
+from api.manufacturing import router as manufacturing_router
+
 app = FastAPI(title="Interlock API", description="Manufacturing Graph Intelligence")
 
 app.add_middleware(
@@ -28,6 +30,7 @@ app.add_middleware(
 )
 
 app.include_router(auth_router)
+app.include_router(manufacturing_router)
 
 
 @app.middleware("http")

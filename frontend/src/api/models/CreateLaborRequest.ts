@@ -2,7 +2,10 @@
 /* istanbul ignore file */
 /* tslint:disable */
  
-export type ApiKeyCreate = {
+export type CreateLaborRequest = {
     name: string;
+    hourly_rate: number;
+    description?: (string | null);
+    skill_level?: (string | null);
 };
 

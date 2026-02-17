@@ -1,7 +1,7 @@
-/* eslint-disable */
 /* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
+/* eslint-disable */
 import type { Body_chat_agent_agent_chat_post } from '../models/Body_chat_agent_agent_chat_post';
 import type { Body_ingest_bom_ingest_bom_post } from '../models/Body_ingest_bom_ingest_bom_post';
 import type { PartNode } from '../models/PartNode';
@@ -9,6 +9,27 @@ import type { CancelablePromise } from '../core/CancelablePromise';
 import { OpenAPI } from '../core/OpenAPI';
 import { request as __request } from '../core/request';
 export class DefaultService {
+    /**
+     * Read Part
+     * Get a specific part by ID.
+     * @param partId
+     * @returns PartNode Successful Response
+     * @throws ApiError
+     */
+    public static readPartPartsPartIdGet(
+        partId: string,
+    ): CancelablePromise<PartNode> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/parts/{part_id}',
+            path: {
+                'part_id': partId,
+            },
+            errors: {
+                422: `Validation Error`,
+            },
+        });
+    }
     /**
      * Read Root
      * @returns any Successful Response
@@ -127,27 +148,6 @@ export class DefaultService {
         });
     }
     /**
-     * Read Part
-     * Get a specific part by ID.
-     * @param partId
-     * @returns PartNode Successful Response
-     * @throws ApiError
-     */
-    public static readPartPartsPartIdGet(
-        partId: string,
-    ): CancelablePromise<PartNode> {
-        return __request(OpenAPI, {
-            method: 'GET',
-            url: '/parts/{part_id}',
-            path: {
-                'part_id': partId,
-            },
-            errors: {
-                422: `Validation Error`,
-            },
-        });
-    }
-    /**
      * Read Trees
      * Get all root parts (ends of trees).
      * @returns PartNode Successful Response
@@ -174,26 +174,6 @@ export class DefaultService {
             url: '/trees/{part_id}',
             path: {
                 'part_id': partId,
-            },
-            errors: {
-                422: `Validation Error`,
-            },
-        });
-    }
-    /**
-     * Serve Spa
-     * @param fullPath
-     * @returns any Successful Response
-     * @throws ApiError
-     */
-    public static serveSpaFullPathGet(
-        fullPath: string,
-    ): CancelablePromise<any> {
-        return __request(OpenAPI, {
-            method: 'GET',
-            url: '/{full_path}',
-            path: {
-                'full_path': fullPath,
             },
             errors: {
                 422: `Validation Error`,

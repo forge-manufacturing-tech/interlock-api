@@ -1,7 +1,7 @@
 /* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
-import type { NodeStatus } from './NodeStatus';
+ 
 /**
  * A physical thing: raw material, sub-assembly, or finished product.
  * Each part is created by exactly one operation (purchase or assembly).
@@ -14,7 +14,8 @@ export type PartNode = {
     id?: string;
     name?: (string | null);
     description?: (string | null);
-    status?: NodeStatus;
     unit_of_measure?: string;
+    created_by_id?: (string | null);
+    created_by_type?: (string | null);
 };
 
