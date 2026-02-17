@@ -27,7 +27,6 @@ from langgraph.prebuilt import ToolNode
 from models.main import (
     CurrencyAmount,
     LaborNode,
-    NodeStatus,
     OperationNode,
     OpType,
     PartNode,
@@ -74,7 +73,7 @@ def search_parts(query: str, limit: int = 20) -> str:
         parts = list_parts(limit=limit)
         if not parts:
             return "No parts found in the database."
-        lines = [f"• {p.name} (ID: {p.id}, Status: {p.status})" for p in parts]
+        lines = [f"• {p.name} (ID: {p.id})" for p in parts]
         return "Found parts:\n" + "\n".join(lines)
     except Exception as e:
         return f"Error searching parts: {e}"
@@ -94,17 +93,8 @@ def get_part_details(part_id: str) -> str:
         creator = get_created_by(UUID(part_id))
         creator_info = ""
         if creator:
-            creator_info = (
-                f"\nCreated by operation: {creator.name} "
-                f"(Type: {creator.op_type}, ID: {creator.id})"
-            )
-        return (
-            f"Part: {part.name}\n"
-            f"ID: {part.id}\n"
-            f"Description: {part.description}\n"
-            f"Status: {part.status}"
-            f"{creator_info}"
-        )
+            creator_info = f"\nCreated by operation: {creator.name} (Type: {creator.op_type}, ID: {creator.id})"
+        return f"Part: {part.name}\nID: {part.id}\nDescription: {part.description}{creator_info}"
     except Exception as e:
         return f"Error: {e}"
 
@@ -178,9 +168,7 @@ def list_all_labor() -> str:
         labor_list = list_labor()
         if not labor_list:
             return "No labor types defined."
-        lines = [
-            f"• {lb.name} – ${lb.hourly_rate}/hr (ID: {lb.id})" for lb in labor_list
-        ]
+        lines = [f"• {lb.name} – ${lb.hourly_rate}/hr (ID: {lb.id})" for lb in labor_list]
         return "Labor types:\n" + "\n".join(lines)
     except Exception as e:
         return f"Error: {e}"
@@ -193,11 +181,7 @@ def list_all_tools() -> str:
         tool_list = list_tools()
         if not tool_list:
             return "No tools defined."
-        lines = [
-            f"• {t.name} – ${t.cost_rate}/{t.rate_unit} "
-            f"(ID: {t.id}, linked part: {t.linked_part_id})"
-            for t in tool_list
-        ]
+        lines = [f"• {t.name} – ${t.cost_rate}/{t.rate_unit} (ID: {t.id}, linked part: {t.linked_part_id})" for t in tool_list]
         return "Tools:\n" + "\n".join(lines)
     except Exception as e:
         return f"Error: {e}"
@@ -241,12 +225,7 @@ def purchase_raw_material(
         )
         cost_obj = CurrencyAmount(amount=cost, currency_code=currency)
         result = purchase_part(part, op, [cost_obj])
-        return (
-            f"✅ Purchased '{result.name}'\n"
-            f"   Part ID: {result.id}\n"
-            f"   Cost: {cost} {currency}\n"
-            f"   Unit: {unit_of_measure}"
-        )
+        return f"✅ Purchased '{result.name}'\n   Part ID: {result.id}\n   Cost: {cost} {currency}\n   Unit: {unit_of_measure}"
     except Exception as e:
         return f"❌ Error purchasing {name}: {e}"
 
@@ -297,10 +276,7 @@ def assemble_part(
             return "❌ Error: At least one input part is required."
 
         if not (labor_ids or tool_ids):
-            return (
-                "❌ Error: At least one labor or tool is required. "
-                "Parts don't assemble themselves."
-            )
+            return "❌ Error: At least one labor or tool is required. Parts don't assemble themselves."
 
         if quantities and len(quantities) != len(input_part_ids):
             return "❌ Error: quantities length must match input_part_ids."
@@ -309,9 +285,7 @@ def assemble_part(
         part_inputs = []
         for i, pid in enumerate(input_part_ids):
             qty = quantities[i] if quantities else 1.0
-            part_inputs.append(
-                QuantityInput(resource_id=UUID(pid), quantity=qty, unit="each")
-            )
+            part_inputs.append(QuantityInput(resource_id=UUID(pid), quantity=qty, unit="each"))
 
         # Build labor inputs
         labor_inputs: list[QuantityInput] = []
@@ -319,9 +293,7 @@ def assemble_part(
             for i, lid in enumerate(labor_ids):
                 qty = labor_quantities[i] if labor_quantities else 1.0
                 unit = labor_units[i] if labor_units else "hours"
-                labor_inputs.append(
-                    QuantityInput(resource_id=UUID(lid), quantity=qty, unit=unit)
-                )
+                labor_inputs.append(QuantityInput(resource_id=UUID(lid), quantity=qty, unit=unit))
 
         # Build tool inputs
         tool_inputs: list[QuantityInput] = []
@@ -329,9 +301,7 @@ def assemble_part(
             for i, tid in enumerate(tool_ids):
                 qty = tool_quantities[i] if tool_quantities else 1.0
                 unit = tool_units[i] if tool_units else "hours"
-                tool_inputs.append(
-                    QuantityInput(resource_id=UUID(tid), quantity=qty, unit=unit)
-                )
+                tool_inputs.append(QuantityInput(resource_id=UUID(tid), quantity=qty, unit=unit))
 
         part_id = uuid4()
         part = PartNode(
@@ -352,14 +322,7 @@ def assemble_part(
         )
 
         result = manufacture_part(part, op, part_inputs, labor_inputs, tool_inputs)
-        return (
-            f"✅ Assembled '{result.name}'\n"
-            f"   Part ID: {result.id}\n"
-            f"   Inputs: {len(part_inputs)} parts, "
-            f"{len(labor_inputs)} labor, "
-            f"{len(tool_inputs)} tools\n"
-            f"   Yield: {yield_rate * 100:.0f}%"
-        )
+        return f"✅ Assembled '{result.name}'\n   Part ID: {result.id}\n   Inputs: {len(part_inputs)} parts, {len(labor_inputs)} labor, {len(tool_inputs)} tools\n   Yield: {yield_rate * 100:.0f}%"
     except Exception as e:
         return f"❌ Error assembling {name}: {e}"
 
@@ -390,12 +353,7 @@ def create_labor_type(
         )
         result = create_labor(labor)
         skill_info = f"\n   Skill: {result.skill_level}" if result.skill_level else ""
-        return (
-            f"✅ Created labor '{result.name}'\n"
-            f"   ID: {result.id}\n"
-            f"   Rate: ${result.hourly_rate}/hr"
-            f"{skill_info}"
-        )
+        return f"✅ Created labor '{result.name}'\n   ID: {result.id}\n   Rate: ${result.hourly_rate}/hr{skill_info}"
     except Exception as e:
         return f"❌ Error creating labor: {e}"
 
@@ -431,12 +389,7 @@ def create_machine_tool(
             description=description or f"{name} machine/tool",
         )
         result = create_tool(t)
-        return (
-            f"✅ Created tool '{result.name}'\n"
-            f"   ID: {result.id}\n"
-            f"   Rate: ${result.cost_rate}/{result.rate_unit}\n"
-            f"   Setup: {result.setup_time_minutes} min"
-        )
+        return f"✅ Created tool '{result.name}'\n   ID: {result.id}\n   Rate: ${result.cost_rate}/{result.rate_unit}\n   Setup: {result.setup_time_minutes} min"
     except Exception as e:
         return f"❌ Error creating tool: {e}"
 
@@ -446,7 +399,6 @@ def modify_part(
     part_id: str,
     new_name: str | None = None,
     new_description: str | None = None,
-    new_status: str | None = None,
 ) -> str:
     """Modify an existing part's name, description, or status.
     Args:
@@ -464,15 +416,9 @@ def modify_part(
             part.name = new_name
         if new_description is not None:
             part.description = new_description
-        if new_status is not None:
-            part.status = NodeStatus(new_status)
 
         result = update_part(part)
-        return (
-            f"✅ Updated part '{result.name}'\n"
-            f"   ID: {result.id}\n"
-            f"   Status: {result.status}"
-        )
+        return f"✅ Updated part '{result.name}'\n   ID: {result.id}"
     except Exception as e:
         return f"❌ Error modifying part: {e}"
 
@@ -555,9 +501,7 @@ REVIEW_TOOLS = [
     validate_part_tree,
 ]
 
-ALL_TOOLS = list(
-    {t.name: t for t in QUERY_TOOLS + MODIFY_TOOLS + CREATE_TOOLS}.values()
-)
+ALL_TOOLS = list({t.name: t for t in QUERY_TOOLS + MODIFY_TOOLS + CREATE_TOOLS}.values())
 
 # ═══════════════════════════════════════════════════════════════════════
 #  LangGraph State & Workflow
@@ -798,11 +742,7 @@ def get_tech_transfer_agent():
 
     # ── Helpers ─────────────────────────────────────────────────────────
 
-    WRAP_UP_MSG = (
-        "IMPORTANT: You have used many tool calls already. "
-        "Do NOT call any more tools. Summarize everything you have "
-        "done so far and provide your final answer to the user NOW."
-    )
+    WRAP_UP_MSG = "IMPORTANT: You have used many tool calls already. Do NOT call any more tools. Summarize everything you have done so far and provide your final answer to the user NOW."
 
     def _extract_text(content: object) -> str:
         """Safely extract text from LLM response content."""
@@ -848,14 +788,7 @@ def get_tech_transfer_agent():
             is_empty = not content
 
             if is_empty and not has_tool_calls:
-                messages.append(
-                    SystemMessage(
-                        content=(
-                            "Your previous response was empty. "
-                            "Please provide a helpful text answer to the user."
-                        )
-                    )
-                )
+                messages.append(SystemMessage(content=("Your previous response was empty. Please provide a helpful text answer to the user.")))
                 response = llm_instance.invoke(messages)
 
             new_count = rounds + 1 if has_tool_calls else rounds
@@ -897,14 +830,7 @@ def get_tech_transfer_agent():
             is_empty = not content
 
             if is_empty and not has_tool_calls:
-                messages.append(
-                    SystemMessage(
-                        content=(
-                            "Your previous response was empty. "
-                            "Please provide a response."
-                        )
-                    )
-                )
+                messages.append(SystemMessage(content=("Your previous response was empty. Please provide a response.")))
                 response = llm_instance.invoke(messages)
 
             new_count = rounds + 1 if has_tool_calls else rounds
@@ -1002,45 +928,22 @@ def get_tech_transfer_agent():
         spec_text = _extract_text(response.content)
 
         # Seed the builder's message history with the specification
-        builder_seed = HumanMessage(
-            content=(
-                "Build the following manufacturing tree in the database. "
-                "Follow this specification exactly:\n\n" + spec_text
-            )
-        )
+        builder_seed = HumanMessage(content=("Build the following manufacturing tree in the database. Follow this specification exactly:\n\n" + spec_text))
 
         return {
-            "messages": [
-                AIMessage(
-                    content=(
-                        "📋 I've analyzed your request and created a detailed "
-                        "manufacturing specification. The Builder agent is now "
-                        "constructing the part tree in the database..."
-                    )
-                )
-            ],
+            "messages": [AIMessage(content=("📋 I've analyzed your request and created a detailed manufacturing specification. The Builder agent is now constructing the part tree in the database..."))],
             "builder_messages": [builder_seed],
             "tool_call_count": 0,
         }
 
-    builder_node = _build_sub_agent_node(
-        BUILDER_SYSTEM_PROMPT, CREATE_TOOLS, "builder_messages", strong_llm
-    )
+    builder_node = _build_sub_agent_node(BUILDER_SYSTEM_PROMPT, CREATE_TOOLS, "builder_messages", strong_llm)
 
     def reviewer_setup_node(state: AgentState) -> dict:
         """Prepare the Reviewer's message history to read from the DB."""
         root_id = state.get("root_part_id", "")
         round_num = state.get("refinement_round", 0)
 
-        review_instruction = HumanMessage(
-            content=(
-                f"The Builder has completed the manufacturing tree. "
-                f"The root part ID is: {root_id}\n"
-                f"This is review round {round_num + 1}.\n\n"
-                f"Use the tools to read the full tree from the database, "
-                f"inspect every part and operation, then give your verdict."
-            )
-        )
+        review_instruction = HumanMessage(content=(f"The Builder has completed the manufacturing tree. The root part ID is: {root_id}\nThis is review round {round_num + 1}.\n\nUse the tools to read the full tree from the database, inspect every part and operation, then give your verdict."))
 
         return {
             "reviewer_messages": [review_instruction],
@@ -1049,9 +952,7 @@ def get_tech_transfer_agent():
             "tool_call_count": 0,
         }
 
-    reviewer_node = _build_sub_agent_node(
-        REVIEWER_SYSTEM_PROMPT, REVIEW_TOOLS, "reviewer_messages", standard_llm
-    )
+    reviewer_node = _build_sub_agent_node(REVIEWER_SYSTEM_PROMPT, REVIEW_TOOLS, "reviewer_messages", standard_llm)
 
     def revision_setup_node(state: AgentState) -> dict:
         """Prepare the Builder for a revision round with Reviewer feedback."""
@@ -1061,13 +962,7 @@ def get_tech_transfer_agent():
 
         revision_prompt = BUILDER_REVISION_PROMPT.format(feedback=feedback)
 
-        revision_msg = HumanMessage(
-            content=(
-                f"REVISION ROUND {round_num + 1}.\n"
-                f"The current root part ID is: {root_id}\n\n"
-                f"The Reviewer found issues. Fix them ALL:\n\n{feedback}"
-            )
-        )
+        revision_msg = HumanMessage(content=(f"REVISION ROUND {round_num + 1}.\nThe current root part ID is: {root_id}\n\nThe Reviewer found issues. Fix them ALL:\n\n{feedback}"))
 
         # Keep existing builder messages and append the revision request
         existing_builder = list(state.get("builder_messages", []))
@@ -1097,20 +992,11 @@ def get_tech_transfer_agent():
         rounds = state.get("refinement_round", 0) + 1
         root_id = state.get("root_part_id", "")
 
-        report = (
-            f"✅ **Manufacturing tree built and verified!**\n\n"
-            f"The Builder and Reviewer agents iterated through "
-            f"**{rounds} round(s)** to produce an unambiguous "
-            f"manufacturing plan.\n\n"
-            f"**Root Part ID:** `{root_id}`\n\n"
-        )
+        report = f"✅ **Manufacturing tree built and verified!**\n\nThe Builder and Reviewer agents iterated through **{rounds} round(s)** to produce an unambiguous manufacturing plan.\n\n**Root Part ID:** `{root_id}`\n\n"
         if summary:
             report += f"**Reviewer Summary:**\n{summary}"
         else:
-            report += (
-                "The manufacturing tree has been validated and is ready "
-                "for execution. Use the tree viewer to inspect the full plan."
-            )
+            report += "The manufacturing tree has been validated and is ready for execution. Use the tree viewer to inspect the full plan."
 
         return {"messages": [AIMessage(content=report)]}
 
@@ -1232,15 +1118,11 @@ def get_tech_transfer_agent():
     graph.add_conditional_edges("router", route_by_intent)
 
     # ASK flow (unchanged)
-    graph.add_conditional_edges(
-        "ask_node", _should_continue_tools("ask_tools", "ask_node")
-    )
+    graph.add_conditional_edges("ask_node", _should_continue_tools("ask_tools", "ask_node"))
     graph.add_edge("ask_tools", "ask_node")
 
     # MODIFY flow (unchanged)
-    graph.add_conditional_edges(
-        "modify_node", _should_continue_tools("modify_tools", "modify_node")
-    )
+    graph.add_conditional_edges("modify_node", _should_continue_tools("modify_tools", "modify_node"))
     graph.add_edge("modify_tools", "modify_node")
 
     # GENERAL flow (unchanged)
@@ -1332,15 +1214,8 @@ def get_tech_transfer_agent():
                 content = str(content)
 
         if not content or not str(content).strip():
-            return (
-                "I'm sorry, I wasn't able to generate a response. "
-                "Could you try rephrasing your question?"
-            )
+            return "I'm sorry, I wasn't able to generate a response. Could you try rephrasing your question?"
 
         return content
 
-    return (
-        RunnableLambda(input_adapter)
-        | RunnableLambda(safe_invoke)
-        | RunnableLambda(output_adapter)
-    )
+    return RunnableLambda(input_adapter) | RunnableLambda(safe_invoke) | RunnableLambda(output_adapter)

@@ -34,7 +34,6 @@ from models.main import (
     CurrencyQuantity,
     LaborNode,
     LaborQuantity,
-    NodeStatus,
     OperationNode,
     OpType,
     PartNode,
@@ -144,64 +143,35 @@ class GraphRepository:
 
         # --- Structural validation ---
         if not input_parts:
-            raise ValueError(
-                "Standard operation must have at least one input part. "
-                "You can't manufacture something from nothing."
-            )
+            raise ValueError("Standard operation must have at least one input part. You can't manufacture something from nothing.")
         if not (input_labor or input_tools):
-            raise ValueError(
-                "Standard operation must have at least one labor or tool. "
-                "Parts don't assemble themselves."
-            )
+            raise ValueError("Standard operation must have at least one labor or tool. Parts don't assemble themselves.")
 
         # --- Yield rate validation ---
         if not (0 < operation.yield_rate <= 1.0):
-            raise ValueError(
-                f"yield_rate must be in (0, 1.0], got {operation.yield_rate}. "
-                "A yield_rate of 0.95 means 5% scrap."
-            )
+            raise ValueError(f"yield_rate must be in (0, 1.0], got {operation.yield_rate}. A yield_rate of 0.95 means 5% scrap.")
 
         # --- Quantity validation ---
         for p_input in input_parts:
             if p_input.quantity <= 0:
-                raise ValueError(
-                    f"Part input quantity must be positive, "
-                    f"got {p_input.quantity} for {p_input.resource_id}"
-                )
+                raise ValueError(f"Part input quantity must be positive, got {p_input.quantity} for {p_input.resource_id}")
         for l_input in input_labor:
             if l_input.quantity <= 0:
-                raise ValueError(
-                    f"Labor input quantity must be positive, "
-                    f"got {l_input.quantity} for {l_input.resource_id}"
-                )
+                raise ValueError(f"Labor input quantity must be positive, got {l_input.quantity} for {l_input.resource_id}")
         for t_input in input_tools:
             if t_input.quantity <= 0:
-                raise ValueError(
-                    f"Tool input quantity must be positive, "
-                    f"got {t_input.quantity} for {t_input.resource_id}"
-                )
+                raise ValueError(f"Tool input quantity must be positive, got {t_input.quantity} for {t_input.resource_id}")
 
         # --- Existence validation ---
         for p_input in input_parts:
             existing_part = self.get_part(p_input.resource_id)
             if not existing_part:
-                raise ValueError(
-                    f"Input Part ID {p_input.resource_id} NOT FOUND. "
-                    "Please double-check the ID or use 'list_parts' "
-                    "to find available parts."
-                )
+                raise ValueError(f"Input Part ID {p_input.resource_id} NOT FOUND. Please double-check the ID or use 'list_parts' to find available parts.")
             if not self.get_created_by(existing_part.id):
-                raise ValueError(
-                    f"Input Part '{existing_part.name}' (ID: {existing_part.id}) "
-                    "IS INVALID. It has no creator operation. "
-                    "Every part must be created by an operation. "
-                    "If this is a raw material, use 'purchase_part' to create it first."
-                )
+                raise ValueError(f"Input Part '{existing_part.name}' (ID: {existing_part.id}) IS INVALID. It has no creator operation. Every part must be created by an operation. If this is a raw material, use 'purchase_part' to create it first.")
             # Self-reference check
             if existing_part.id == part.id:
-                raise ValueError(
-                    f"A part cannot be an input to its own creation: {part.name}"
-                )
+                raise ValueError(f"A part cannot be an input to its own creation: {part.name}")
 
         for l_input in input_labor:
             if not self.get_labor(l_input.resource_id):
@@ -221,18 +191,12 @@ class GraphRepository:
 
             # 3. Link Inputs
             for p_input in input_parts:
-                self._add_input_part(
-                    operation.id, p_input.resource_id, p_input.quantity, p_input.unit
-                )
+                self._add_input_part(operation.id, p_input.resource_id, p_input.quantity, p_input.unit)
             for l_input in input_labor:
-                self._add_input_labor(
-                    operation.id, l_input.resource_id, l_input.quantity, l_input.unit
-                )
+                self._add_input_labor(operation.id, l_input.resource_id, l_input.quantity, l_input.unit)
 
             for t_input in input_tools:
-                self._add_input_tool(
-                    operation.id, t_input.resource_id, t_input.quantity, t_input.unit
-                )
+                self._add_input_tool(operation.id, t_input.resource_id, t_input.quantity, t_input.unit)
 
             self.db.commit()
             return part
@@ -248,14 +212,13 @@ class GraphRepository:
         self.db.execute(
             """
             INSERT INTO part_nodes
-                (id, name, description, status, unit_of_measure)
+                (id, name, description, unit_of_measure, status)
             VALUES (%s, %s, %s, %s, %s)
             """,
             (
                 str(part.id),
                 part.name,
                 part.description,
-                part.status.value,
                 part.unit_of_measure,
             ),
         )
@@ -271,15 +234,11 @@ class GraphRepository:
     def list_parts(
         self,
         *,
-        status: NodeStatus | None = None,
         limit: int = 100,
         offset: int = 0,
     ) -> list[PartNode]:
         clauses: list[str] = []
         params: list[object] = []
-        if status is not None:
-            clauses.append("status = %s")
-            params.append(status.value)
         where = (" WHERE " + " AND ".join(clauses)) if clauses else ""
         params += [limit, offset]
         rows = self.db.fetch_all(
@@ -320,7 +279,6 @@ class GraphRepository:
             "id": str(part.id),
             "name": part.name,
             "type": "part",
-            "status": part.status.value,
             "children": [],
         }
 
@@ -404,9 +362,7 @@ class GraphRepository:
 
                 # Recursively expand the tool's linked part
                 if tq.tool.linked_part_id:
-                    tool_entry["linked_part"] = self.get_tree_json(
-                        tq.tool.linked_part_id
-                    )
+                    tool_entry["linked_part"] = self.get_tree_json(tq.tool.linked_part_id)
 
                 op_node["children"].append(tool_entry)
 
@@ -417,13 +373,12 @@ class GraphRepository:
         cur = self.db.execute(
             """
             UPDATE part_nodes
-            SET name = %s, description = %s, status = %s, unit_of_measure = %s
+            SET name = %s, description = %s, unit_of_measure = %s, status = %s
             WHERE id = %s
             """,
             (
                 part.name,
                 part.description,
-                part.status.value,
                 part.unit_of_measure,
                 str(part.id),
             ),
@@ -457,9 +412,7 @@ class GraphRepository:
         return curr
 
     def get_currency(self, curr_id: UUID) -> CurrencyNode | None:
-        row = self.db.fetch_one(
-            "SELECT * FROM currency_nodes WHERE id = %s", (str(curr_id),)
-        )
+        row = self.db.fetch_one("SELECT * FROM currency_nodes WHERE id = %s", (str(curr_id),))
         return self._to_currency(row) if row else None
 
     def list_currencies(self) -> list[CurrencyNode]:
@@ -467,9 +420,7 @@ class GraphRepository:
         return [self._to_currency(r) for r in rows]
 
     def delete_currency(self, curr_id: UUID) -> bool:
-        cur = self.db.execute(
-            "DELETE FROM currency_nodes WHERE id = %s", (str(curr_id),)
-        )
+        cur = self.db.execute("DELETE FROM currency_nodes WHERE id = %s", (str(curr_id),))
         self.db.commit()
         return cur.rowcount > 0
 
@@ -479,9 +430,7 @@ class GraphRepository:
 
     def create_labor(self, labor: LaborNode) -> LaborNode:
         if labor.hourly_rate < 0:
-            raise ValueError(
-                f"Labor hourly_rate must be non-negative, got {labor.hourly_rate}"
-            )
+            raise ValueError(f"Labor hourly_rate must be non-negative, got {labor.hourly_rate}")
         self.db.execute(
             """
             INSERT INTO labor_nodes
@@ -500,9 +449,7 @@ class GraphRepository:
         return labor
 
     def get_labor(self, labor_id: UUID) -> LaborNode | None:
-        row = self.db.fetch_one(
-            "SELECT * FROM labor_nodes WHERE id = %s", (str(labor_id),)
-        )
+        row = self.db.fetch_one("SELECT * FROM labor_nodes WHERE id = %s", (str(labor_id),))
         return self._to_labor(row) if row else None
 
     def list_labor(self) -> list[LaborNode]:
@@ -521,14 +468,9 @@ class GraphRepository:
         if not self.get_created_by(linked_part.id):
             raise ValueError(f"Linked Part {linked_part.name} is invalid (orphaned)")
         if tool.cost_rate < 0:
-            raise ValueError(
-                f"Tool cost_rate must be non-negative, got {tool.cost_rate}"
-            )
+            raise ValueError(f"Tool cost_rate must be non-negative, got {tool.cost_rate}")
         if tool.setup_time_minutes < 0:
-            raise ValueError(
-                f"Tool setup_time_minutes must be non-negative, "
-                f"got {tool.setup_time_minutes}"
-            )
+            raise ValueError(f"Tool setup_time_minutes must be non-negative, got {tool.setup_time_minutes}")
 
         self.db.execute(
             """
@@ -551,9 +493,7 @@ class GraphRepository:
         return tool
 
     def get_tool(self, tool_id: UUID) -> ToolNode | None:
-        row = self.db.fetch_one(
-            "SELECT * FROM tool_nodes WHERE id = %s", (str(tool_id),)
-        )
+        row = self.db.fetch_one("SELECT * FROM tool_nodes WHERE id = %s", (str(tool_id),))
         return self._to_tool(row) if row else None
 
     def list_tools(self) -> list[ToolNode]:
@@ -605,9 +545,7 @@ class GraphRepository:
     ) -> list[OperationNode]:
         if op_type is not None:
             rows = self.db.fetch_all(
-                "SELECT * FROM operation_nodes"
-                " WHERE op_type = %s"
-                " ORDER BY name LIMIT %s OFFSET %s",
+                "SELECT * FROM operation_nodes WHERE op_type = %s ORDER BY name LIMIT %s OFFSET %s",
                 (op_type.value, limit, offset),
             )
         else:
@@ -726,9 +664,7 @@ class GraphRepository:
 
     # --- Parts ---
 
-    def _add_input_part(
-        self, op_id: UUID, part_id: UUID, quantity: float, unit: str = "pcs"
-    ) -> None:
+    def _add_input_part(self, op_id: UUID, part_id: UUID, quantity: float, unit: str = "pcs") -> None:
         self.db.execute(
             """
             INSERT INTO operation_input_parts
@@ -760,9 +696,7 @@ class GraphRepository:
 
     # --- Labor ---
 
-    def _add_input_labor(
-        self, op_id: UUID, labor_id: UUID, quantity: float, unit: str = "hours"
-    ) -> None:
+    def _add_input_labor(self, op_id: UUID, labor_id: UUID, quantity: float, unit: str = "hours") -> None:
         self.db.execute(
             """
             INSERT INTO operation_input_labor
@@ -794,9 +728,7 @@ class GraphRepository:
 
     # --- Tools ---
 
-    def _add_input_tool(
-        self, op_id: UUID, tool_id: UUID, quantity: float, unit: str = "pcs"
-    ) -> None:
+    def _add_input_tool(self, op_id: UUID, tool_id: UUID, quantity: float, unit: str = "pcs") -> None:
         self.db.execute(
             """
             INSERT INTO operation_input_tools
@@ -828,9 +760,7 @@ class GraphRepository:
 
     # --- Currency (Purchase) ---
 
-    def _add_input_currency(
-        self, op_id: UUID, curr_id: UUID, quantity: float, unit: str = "units"
-    ) -> None:
+    def _add_input_currency(self, op_id: UUID, curr_id: UUID, quantity: float, unit: str = "units") -> None:
         self.db.execute(
             """
             INSERT INTO operation_input_currency
@@ -908,17 +838,11 @@ class GraphRepository:
 
     def get_ancestors(self, part_id: UUID) -> list[PartNode]:
         """All upstream parts feeding into *part_id*."""
-        return [
-            n
-            for n in self.get_full_timeline(part_id)
-            if isinstance(n, PartNode) and n.id != part_id
-        ]
+        return [n for n in self.get_full_timeline(part_id) if isinstance(n, PartNode) and n.id != part_id]
 
     def get_leaf_currencies(self, part_id: UUID) -> list[CurrencyNode]:
         """Currency leaves reachable from *part_id*."""
-        return [
-            n for n in self.get_full_timeline(part_id) if isinstance(n, CurrencyNode)
-        ]
+        return [n for n in self.get_full_timeline(part_id) if isinstance(n, CurrencyNode)]
 
     # ===============================================================
     # Validation
@@ -976,9 +900,7 @@ class GraphRepository:
                     errs.append(
                         ValidationError(
                             node.id,
-                            f"Part '{node.name}' has no creator operation. "
-                            f"Every part must be created by a Purchase or "
-                            f"Standard operation.",
+                            f"Part '{node.name}' has no creator operation. Every part must be created by a Purchase or Standard operation.",
                         )
                     )
                 else:
@@ -1012,8 +934,7 @@ class GraphRepository:
                             errs.append(
                                 ValidationError(
                                     node.id,
-                                    f"Purchase Op '{node.name}' has "
-                                    f"non-positive cost: {cq.quantity}",
+                                    f"Purchase Op '{node.name}' has non-positive cost: {cq.quantity}",
                                 )
                             )
                         queue.append((cq.currency, current_path))
@@ -1031,8 +952,7 @@ class GraphRepository:
                         errs.append(
                             ValidationError(
                                 node.id,
-                                f"Standard Op '{node.name}' has no input "
-                                f"parts — can't manufacture from nothing",
+                                f"Standard Op '{node.name}' has no input parts — can't manufacture from nothing",
                             )
                         )
                     # Must have at least one labor or tool
@@ -1040,8 +960,7 @@ class GraphRepository:
                         errs.append(
                             ValidationError(
                                 node.id,
-                                f"Standard Op '{node.name}' requires at "
-                                f"least one Labor or Tool input",
+                                f"Standard Op '{node.name}' requires at least one Labor or Tool input",
                             )
                         )
                     # Validate yield_rate
@@ -1049,9 +968,7 @@ class GraphRepository:
                         errs.append(
                             ValidationError(
                                 node.id,
-                                f"Standard Op '{node.name}' has invalid "
-                                f"yield_rate: {node.yield_rate} "
-                                f"(must be in (0, 1.0])",
+                                f"Standard Op '{node.name}' has invalid yield_rate: {node.yield_rate} (must be in (0, 1.0])",
                             )
                         )
                     # Validate all quantities are positive
@@ -1060,9 +977,7 @@ class GraphRepository:
                             errs.append(
                                 ValidationError(
                                     node.id,
-                                    f"Standard Op '{node.name}': part "
-                                    f"'{pq.part.name}' has non-positive "
-                                    f"quantity: {pq.quantity}",
+                                    f"Standard Op '{node.name}': part '{pq.part.name}' has non-positive quantity: {pq.quantity}",
                                 )
                             )
                     for lq in labors:
@@ -1070,9 +985,7 @@ class GraphRepository:
                             errs.append(
                                 ValidationError(
                                     node.id,
-                                    f"Standard Op '{node.name}': labor "
-                                    f"'{lq.labor.name}' has non-positive "
-                                    f"quantity: {lq.quantity}",
+                                    f"Standard Op '{node.name}': labor '{lq.labor.name}' has non-positive quantity: {lq.quantity}",
                                 )
                             )
                     for tq in tools:
@@ -1080,9 +993,7 @@ class GraphRepository:
                             errs.append(
                                 ValidationError(
                                     node.id,
-                                    f"Standard Op '{node.name}': tool "
-                                    f"'{tq.tool.name}' has non-positive "
-                                    f"quantity: {tq.quantity}",
+                                    f"Standard Op '{node.name}': tool '{tq.tool.name}' has non-positive quantity: {tq.quantity}",
                                 )
                             )
                     # Recurse into input parts
@@ -1103,7 +1014,6 @@ class GraphRepository:
             id=UUID(str(r["id"])),
             name=str(r["name"]),
             description=r.get("description"),
-            status=NodeStatus(str(r["status"])),
             unit_of_measure=str(r.get("unit_of_measure", "each")),
         )
 

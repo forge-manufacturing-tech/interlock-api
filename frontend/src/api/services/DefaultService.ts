@@ -1,7 +1,7 @@
+/* eslint-disable */
 /* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
-/* eslint-disable */
 import type { Body_chat_agent_agent_chat_post } from '../models/Body_chat_agent_agent_chat_post';
 import type { Body_ingest_bom_ingest_bom_post } from '../models/Body_ingest_bom_ingest_bom_post';
 import type { PartNode } from '../models/PartNode';

@@ -17,7 +17,6 @@ from models.main import (
     CurrencyQuantity,
     LaborNode,
     LaborQuantity,
-    NodeStatus,
     OperationNode,
     OpType,
     PartNode,
@@ -123,9 +122,7 @@ def manufacture_part(
     input_tools: list[QuantityInput],
     db: DatabaseManager | None = None,
 ) -> PartNode:
-    return _repo(db).manufacture_part(
-        part, operation, input_parts, input_labor, input_tools
-    )
+    return _repo(db).manufacture_part(part, operation, input_parts, input_labor, input_tools)
 
 
 # ── Part CRUD ──────────────────────────────────────────────────────
@@ -140,13 +137,11 @@ def get_part(
 
 def list_parts(
     *,
-    status: NodeStatus | None = None,
     limit: int = 100,
     offset: int = 0,
     db: DatabaseManager | None = None,
 ) -> list[PartNode]:
     return _repo(db).list_parts(
-        status=status,
         limit=limit,
         offset=offset,
     )

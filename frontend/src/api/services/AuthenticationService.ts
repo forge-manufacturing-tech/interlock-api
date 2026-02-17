@@ -1,7 +1,7 @@
+/* eslint-disable */
 /* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
-/* eslint-disable */
 import type { ApiKeyCreate } from '../models/ApiKeyCreate';
 import type { ApiKeyRead } from '../models/ApiKeyRead';
 import type { SystemSettings } from '../models/SystemSettings';

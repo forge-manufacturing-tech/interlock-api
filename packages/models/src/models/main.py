@@ -4,7 +4,9 @@ from enum import StrEnum
 from typing import Any
 from uuid import UUID, uuid4
 
-from pydantic import BaseModel, Field
+from pydantic import ConfigDict
+from sqlalchemy import JSON, Column, ForeignKey
+from sqlmodel import Field, SQLModel
 
 from .inputs import CurrencyAmount
 
@@ -20,27 +22,56 @@ class OpType(StrEnum):
     PURCHASE = "PURCHASE"  # Uses Currency
 
 
-class NodeStatus(StrEnum):
-    PENDING = "PENDING"
-    APPROVED = "APPROVED"
-    REJECTED = "REJECTED"
-
-
 # --- Base Node ---
 
 
-class BaseNode(BaseModel):
+class BaseNode(SQLModel):
     """Common fields for every node in the tree."""
 
-    id: UUID = Field(default_factory=uuid4)
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
     name: str | None = None
     description: str | None = None
+
+
+# --- Link Tables ---
+
+
+class OperationInputParts(SQLModel, table=True):
+    __tablename__ = "operation_input_parts"
+    operation_id: UUID = Field(sa_column=Column(ForeignKey("operation_nodes.id", ondelete="CASCADE"), primary_key=True))
+    part_id: UUID = Field(sa_column=Column(ForeignKey("part_nodes.id", ondelete="CASCADE"), primary_key=True))
+    quantity: float = Field(default=0.0)
+    unit: str = Field(default="each")
+
+
+class OperationInputLabor(SQLModel, table=True):
+    __tablename__ = "operation_input_labor"
+    operation_id: UUID = Field(sa_column=Column(ForeignKey("operation_nodes.id", ondelete="CASCADE"), primary_key=True))
+    labor_id: UUID = Field(sa_column=Column(ForeignKey("labor_nodes.id", ondelete="CASCADE"), primary_key=True))
+    quantity: float = Field(default=0.0)
+    unit: str = Field(default="hours")
+
+
+class OperationInputTools(SQLModel, table=True):
+    __tablename__ = "operation_input_tools"
+    operation_id: UUID = Field(sa_column=Column(ForeignKey("operation_nodes.id", ondelete="CASCADE"), primary_key=True))
+    tool_id: UUID = Field(sa_column=Column(ForeignKey("tool_nodes.id", ondelete="CASCADE"), primary_key=True))
+    quantity: float = Field(default=0.0)
+    unit: str = Field(default="hours")
+
+
+class OperationInputCurrency(SQLModel, table=True):
+    __tablename__ = "operation_input_currency"
+    operation_id: UUID = Field(sa_column=Column(ForeignKey("operation_nodes.id", ondelete="CASCADE"), primary_key=True))
+    currency_id: UUID = Field(sa_column=Column(ForeignKey("currency_nodes.id", ondelete="CASCADE"), primary_key=True))
+    quantity: float = Field(default=0.0)
+    unit: str = Field(default="units")
 
 
 # --- Constituent Nodes ---
 
 
-class PartNode(BaseNode):
+class PartNode(BaseNode, table=True):
     """
     A physical thing: raw material, sub-assembly, or finished product.
     Each part is created by exactly one operation (purchase or assembly).
@@ -50,19 +81,26 @@ class PartNode(BaseNode):
     quantity calculations in BOMs and quotes.
     """
 
-    status: NodeStatus = NodeStatus.PENDING
-    unit_of_measure: str = "each"
+    __tablename__ = "part_nodes"
+
+    unit_of_measure: str = Field(default="each")
+
+    # Optional graph fields (not in original Pydantic but needed for DB/Graph)
+    created_by_id: UUID | None = Field(default=None)
+    created_by_type: str | None = Field(default=None)
 
 
-class CurrencyNode(BaseNode):
+class CurrencyNode(BaseNode, table=True):
     """
     Represents a currency (e.g. USD, EUR).
     """
 
+    __tablename__ = "currency_nodes"
+
     iso_code: str | None = None  # e.g. "USD"
 
 
-class LaborNode(BaseNode):
+class LaborNode(BaseNode, table=True):
     """
     Represents a type of labor (e.g. 'Welding', 'Assembly').
 
@@ -71,11 +109,13 @@ class LaborNode(BaseNode):
     (e.g. "AWS D1.1 Certified Welder") — essential for work instructions.
     """
 
-    hourly_rate: float = 0.0
+    __tablename__ = "labor_nodes"
+
+    hourly_rate: float = Field(default=0.0)
     skill_level: str | None = None
 
 
-class ToolNode(BaseNode):
+class ToolNode(BaseNode, table=True):
     """
     Represents a tool or machine instance.
     Must reference a PartNode that defines the physical equipment.
@@ -85,13 +125,15 @@ class ToolNode(BaseNode):
     each use — this is a separate cost bucket from run time.
     """
 
-    linked_part_id: UUID
-    cost_rate: float = 0.0
-    rate_unit: str = "hour"
-    setup_time_minutes: float = 0.0
+    __tablename__ = "tool_nodes"
+
+    linked_part_id: UUID = Field(foreign_key="part_nodes.id")
+    cost_rate: float = Field(default=0.0)
+    rate_unit: str = Field(default="hour")
+    setup_time_minutes: float = Field(default=0.0)
 
 
-class OperationNode(BaseNode):
+class OperationNode(BaseNode, table=True):
     """
     A manufacturing procedure.
 
@@ -109,19 +151,26 @@ class OperationNode(BaseNode):
                        (temperatures, tolerances, pressures, etc.).
     """
 
-    op_type: OpType = OpType.STANDARD
+    __tablename__ = "operation_nodes"
+
+    op_type: OpType = Field(default=OpType.STANDARD)
     instructions: str | None = None
-    setup_time_minutes: float = 0.0
-    estimated_duration_minutes: float = 0.0
-    yield_rate: float = 1.0
-    cost_estimate: float = 0.0
-    properties: dict[str, Any] = Field(default_factory=dict)
+    setup_time_minutes: float = Field(default=0.0)
+    estimated_duration_minutes: float = Field(default=0.0)
+    yield_rate: float = Field(default=1.0)
+    cost_estimate: float = Field(default=0.0)
+    properties: dict[str, Any] = Field(default_factory=dict, sa_column=Column(JSON))
+
+    # Pydantic configuration to allow arbitrary types if needed, though dict[str, Any] is standard
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
 
 # --- Quantities (Edges/Inputs) ---
+# These are used for API request/response models and not DB tables themselves (mostly).
+# Although they mirror the link tables, the API often nests them.
 
 
-class QuantityBase(BaseModel):
+class QuantityBase(SQLModel):
     quantity: float
     unit: str  # e.g. "kg", "hours", "each"
 
@@ -153,7 +202,6 @@ class QuantityInput(QuantityBase):
 
 __all__ = [
     "OpType",
-    "NodeStatus",
     "BaseNode",
     "PartNode",
     "CurrencyNode",
@@ -167,4 +215,8 @@ __all__ = [
     "CurrencyQuantity",
     "QuantityInput",
     "CurrencyAmount",
+    "OperationInputParts",
+    "OperationInputLabor",
+    "OperationInputTools",
+    "OperationInputCurrency",
 ]

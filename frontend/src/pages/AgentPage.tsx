@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { DefaultService } from "../api";
+import type { Body_chat_agent_agent_chat_post } from "../api";
 import { Paperclip, Send, X, FileText, Image, Lock } from "lucide-react";
 import { useAuth } from "../lib/auth";
 
@@ -56,7 +57,7 @@ export default function AgentPage() {
     setLoading(true);
 
     try {
-      const formData: Record<string, any> = {};
+      const formData: Body_chat_agent_agent_chat_post = {};
       if (text) formData.message = text;
       if (fileToSend) formData.file = fileToSend;
       const res = await DefaultService.chatAgentAgentChatPost(formData);
@@ -139,11 +140,10 @@ export default function AgentPage() {
             className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
           >
             <div
-              className={`max-w-[75%] rounded-md px-4 py-3 text-sm ${
-                msg.role === "user"
+              className={`max-w-[75%] rounded-md px-4 py-3 text-sm ${msg.role === "user"
                   ? "bg-primary/20 text-text-primary"
                   : "bg-surface text-text-secondary"
-              }`}
+                }`}
             >
               {msg.fileName && (
                 <div className="mb-2 flex items-center gap-2 rounded border border-border bg-surface-lighter px-2 py-1 text-xs text-text-muted">

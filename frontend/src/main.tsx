@@ -10,7 +10,11 @@ import "./index.css";
 // Configure API client base URL
 // If VITE_API_URL is set (e.g. for production), use it.
 // Otherwise default to /api which works with the local Vite proxy and Docker Nginx proxy.
-OpenAPI.BASE = import.meta.env.VITE_API_URL || "/api";
+OpenAPI.BASE = import.meta.env.VITE_API_URL;
+
+if (!OpenAPI.BASE) {
+  throw new Error("VITE_API_URL is not set");
+}
 
 const queryClient = new QueryClient();
 

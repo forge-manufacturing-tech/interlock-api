@@ -1,37 +1,21 @@
 # Database Package
 
-This package manages the graph database connection using **Kùzu**.
+This package manages the relational database connection using **PostgreSQL** (via `psycopg2`).
 
 ## Architecture
 
-This package supports a **Dual-Graph Federation** model:
-1.  **Primary Database (Private)**: Read/Write access. Stores user-specific data.
-2.  **Referenced Database (Public)**: Read-Only access. Stores shared industry standards or public datasets.
+The system uses a standard relational database model to store the manufacturing graph.
+- **Connection**: Managed by `DatabaseManager`.
+- **Schema**: Defined in `src/database/schema.py`.
+- **Migrations**: Currently, the system uses an **idempotent initialization** strategy. At startup, it runs `CREATE TABLE IF NOT EXISTS` statements for all tables. It does *not* currently support complex schema migrations (e.g., column renames) automatically; these must be handled manually or by resetting the database in development.
 
 ## Configuration
 
-The database can be configured via Environment Variables:
+The database is configured via Environment Variables:
 
 | Variable | Description | Default |
 | :--- | :--- | :--- |
-| `KUZU_DB_PATH` | Path to the private database directory/file. | `./interlock.kuzu` |
-| `KUZU_PUBLIC_DB_PATH` | Path to the public read-only database. | None |
-| `KUZU_BUFFER_POOL_SIZE` | Memory buffer for the database (bytes). | 1073741824 (1GB) |
-
-## Cloud Deployment (GCP / Kubernetes)
-
-Since Kùzu uses the filesystem, persistence depends on where the `KUZU_DB_PATH` points.
-
-### Deployment options:
-1.  **Cloud Run + Cloud Storage FUSE**: 
-    - Mount a GCS bucket to `/mnt/gcs_data`.
-    - Set `KUZU_DB_PATH=/mnt/gcs_data/private.kuzu`.
-2.  **Cloud Run + Filestore (NFS)**:
-    - Mount an NFS share to `/data`.
-    - Set `KUZU_DB_PATH=/data/private.kuzu`.
-3.  **Kubernetes (GKE)**:
-    - Use a `PersistentVolumeClaim` (PVC) mounted to the pod.
-    - Point `KUZU_DB_PATH` to the mount path.
+| `DATABASE_URL` | Full PostgreSQL connection string (libpq format). | None (Required) |
 
 ## Usage
 
@@ -40,11 +24,8 @@ from database.manager import DatabaseManager
 
 db = DatabaseManager()
 
-# Run a query on the private graph
-results = db.execute("MATCH (a:Node) RETURN a")
+# Execute raw SQL
+db.execute("SELECT * FROM part_nodes")
 
-# Access the public graph separately (Application-Side Federation)
-public_conn = db.get_public_connection()
-if public_conn:
-    standards = public_conn.execute("MATCH (s:Standard) RETURN s")
+# Connection management is handled automatically.
 ```

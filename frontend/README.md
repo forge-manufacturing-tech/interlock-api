@@ -14,6 +14,14 @@ This is the React frontend for the Interlock platform, built with [Vite](https:/
    bun install
    ```
 
+## API URL
+
+Set the API url by setting the environment variable:
+
+```bash
+export VITE_API_URL="http://127.0.0.1:8000"
+```
+
 ## Development
 
 To start the development server:
@@ -60,6 +68,21 @@ docker run -p 5000:80 interlock-frontend
 
 To run the linter:
 
+
+## API Client Generation
+
+To regenerate the API client from `openapi.json`:
+
 ```bash
-bun run lint
+bun run generate-client
 ```
+
+To regenerate from a running backend (e.g. if `VITE_API_URL` is set to your backend):
+
+```bash
+# Replace with your actual backend URL
+bunx openapi-typescript-codegen --input http://localhost:8000/openapi.json --output src/api --client fetch
+```
+
+The client is automatically configured to use `VITE_API_URL` at runtime in `src/main.tsx`.
+

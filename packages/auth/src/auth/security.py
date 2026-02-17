@@ -3,7 +3,7 @@ from __future__ import annotations
 import hashlib
 import os
 import secrets
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 import bcrypt
@@ -30,7 +30,7 @@ def verify_password(password: str, hashed: str) -> bool:
 
 
 def create_access_token(user_id: UUID, email: str) -> str:
-    expire = datetime.now(timezone.utc) + timedelta(minutes=JWT_EXPIRATION_MINUTES)
+    expire = datetime.now(UTC) + timedelta(minutes=JWT_EXPIRATION_MINUTES)
     payload = {
         "sub": str(user_id),
         "email": email,

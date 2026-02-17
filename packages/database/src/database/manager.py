@@ -2,6 +2,7 @@ import os
 from typing import Any
 
 import psycopg2
+import psycopg2.extensions
 import psycopg2.extras
 from pydantic import BaseModel
 
@@ -41,7 +42,7 @@ class DatabaseManager:
     def connection(self) -> psycopg2.extensions.connection:
         if self._conn is None or self._conn.closed:
             self._initialize_database()
-        return self._conn  # type: ignore
+        return self._conn
 
     def execute(
         self,
@@ -69,7 +70,7 @@ class DatabaseManager:
         parameters: tuple[Any, ...] | dict[str, Any] | None = None,
     ) -> dict | None:
         cursor = self.execute(query, parameters)
-        return cursor.fetchone()  # type: ignore
+        return cursor.fetchone()
 
     def fetch_all(
         self,
@@ -77,7 +78,7 @@ class DatabaseManager:
         parameters: tuple[Any, ...] | dict[str, Any] | None = None,
     ) -> list[dict]:
         cursor = self.execute(query, parameters)
-        return cursor.fetchall()  # type: ignore
+        return cursor.fetchall()
 
     def commit(self) -> None:
         self.connection.commit()

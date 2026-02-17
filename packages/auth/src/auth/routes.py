@@ -4,8 +4,18 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
-from .dependencies import get_current_user, require_admin, _get_auth_repo
-from .models import ApiKeyCreate, ApiKeyRead, SystemSettings, SystemSettingUpdate, TokenResponse, UserCreate, UserLogin, UserRead, UserUpdate
+from .dependencies import _get_auth_repo, get_current_user, require_admin
+from .models import (
+    ApiKeyCreate,
+    ApiKeyRead,
+    SystemSettings,
+    SystemSettingUpdate,
+    TokenResponse,
+    UserCreate,
+    UserLogin,
+    UserRead,
+    UserUpdate,
+)
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
@@ -34,9 +44,7 @@ async def login(data: UserLogin):
     try:
         result = repo.authenticate_user(data.email, data.password)
     except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail=str(e)
-        ) from e
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(e)) from e
 
     return TokenResponse(
         access_token=result["access_token"],

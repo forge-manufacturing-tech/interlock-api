@@ -1,7 +1,17 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { DefaultService } from "../api";
+import type { PartNode } from "../api";
 import { ChevronRight, ChevronDown, Search } from "lucide-react";
+
+interface NodeData extends PartNode {
+  children?: NodeData[];
+  type?: string;
+  quantity?: number;
+  unit?: string;
+  unit_cost?: number;
+  [key: string]: unknown;
+}
 
 export default function PartsPage() {
   const [search, setSearch] = useState("");
@@ -117,14 +127,14 @@ function TreeCard({
   onToggle,
   searchQuery,
 }: {
-  root: Record<string, any>;
+  root: PartNode;
   expanded: boolean;
   onToggle: () => void;
   searchQuery: string;
 }) {
   const { data: treeData, isLoading } = useQuery({
     queryKey: ["tree", root.id],
-    queryFn: () => DefaultService.readTreeStructureTreesPartIdGet(root.id!),
+    queryFn: async () => (await DefaultService.readTreeStructureTreesPartIdGet(root.id!)) as NodeData,
     enabled: expanded && !!root.id,
   });
 
@@ -183,7 +193,7 @@ function TreeCard({
   );
 }
 
-function countParts(node: Record<string, any>): number {
+function countParts(node: NodeData): number {
   let count = node.type === "part" ? 1 : 0;
   if (node.children) {
     for (const child of node.children) {
@@ -198,14 +208,14 @@ function TreeNode({
   depth,
   searchQuery,
 }: {
-  node: Record<string, any>;
+  node: NodeData;
   depth: number;
   searchQuery: string;
 }) {
   const [collapsed, setCollapsed] = useState(depth > 2);
-  const children = node.children as Record<string, any>[] | undefined;
+  const children = node.children;
   const hasChildren = children && children.length > 0;
-  const typeColor = NODE_TYPE_COLORS[node.type?.toLowerCase?.()] || "#71717A";
+  const typeColor = NODE_TYPE_COLORS[node.type?.toLowerCase() || ""] || "#71717A";
 
   return (
     <div style={{ marginLeft: depth * 20 }}>
@@ -243,7 +253,7 @@ function TreeNode({
       </div>
       {hasChildren && !collapsed && (
         <div>
-          {children.map((child: Record<string, any>, i: number) => (
+          {children.map((child: NodeData, i: number) => (
             <TreeNode key={child.id || i} node={child} depth={depth + 1} searchQuery={searchQuery} />
           ))}
         </div>

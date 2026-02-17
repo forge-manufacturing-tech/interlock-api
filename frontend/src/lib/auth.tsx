@@ -33,9 +33,9 @@ function configureApi(token: string | null) {
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [token, setToken] = useState<string | null>(null);
+  const [token, setToken] = useState<string | null>(() => localStorage.getItem("token"));
   const [user, setUser] = useState<UserRead | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => !!localStorage.getItem("token"));
 
   useEffect(() => {
     const saved = localStorage.getItem("token");
@@ -43,17 +43,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       configureApi(saved);
       AuthenticationService.getMeAuthMeGet()
         .then((u) => {
-          setToken(saved);
           setUser(u);
         })
         .catch(() => {
           localStorage.removeItem("token");
+          setToken(null);
           configureApi(null);
         })
         .finally(() => setLoading(false));
     } else {
       configureApi(null);
-      setLoading(false);
+      // loading is already initialized to false
     }
   }, []);
 
@@ -91,6 +91,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function useAuth() {
   const ctx = useContext(AuthContext);
   if (!ctx) throw new Error("useAuth must be used within AuthProvider");

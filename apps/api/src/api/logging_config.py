@@ -3,9 +3,7 @@ import logging.config
 
 
 def setup_logging():
-    log_format = (
-        "%(asctime)s | %(levelname)-8s | %(name)s:%(funcName)s:%(lineno)d - %(message)s"
-    )
+    log_format = "%(asctime)s | %(levelname)-8s | %(name)s:%(funcName)s:%(lineno)d - %(message)s"
 
     logging.config.dictConfig(
         {

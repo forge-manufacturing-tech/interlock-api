@@ -1,7 +1,15 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { DefaultService, OpenAPI } from "../api";
+import type { PartNode } from "../api";
 import { Download, FileText } from "lucide-react";
+
+interface NodeData extends PartNode {
+  children?: NodeData[];
+  type?: string;
+  cost?: number;
+  [key: string]: unknown;
+}
 
 const NODE_TYPE_COLORS: Record<string, string> = {
   part: "#1E40AF",
@@ -91,11 +99,10 @@ export default function TreesPage() {
               <button
                 key={root.id}
                 onClick={() => setSelectedRoot(root.id ?? null)}
-                className={`rounded-md border p-4 text-left transition-colors ${
-                  selectedRoot === root.id
-                    ? "border-primary bg-primary/10"
-                    : "border-border bg-surface-light hover:border-text-muted"
-                }`}
+                className={`rounded-md border p-4 text-left transition-colors ${selectedRoot === root.id
+                  ? "border-primary bg-primary/10"
+                  : "border-border bg-surface-light hover:border-text-muted"
+                  }`}
               >
                 <p className="font-mono text-sm font-medium text-text-primary">
                   {root.name || "Unnamed"}
@@ -157,14 +164,14 @@ function TreeNode({
   node,
   depth,
 }: {
-  node: Record<string, any>;
+  node: NodeData;
   depth: number;
 }) {
   const [collapsed, setCollapsed] = useState(depth > 1);
-  const children = node.children as Record<string, any>[] | undefined;
+  const children = node.children;
   const hasChildren = children && children.length > 0;
   const typeColor =
-    NODE_TYPE_COLORS[node.type?.toLowerCase?.()] || "#71717A";
+    NODE_TYPE_COLORS[node.type?.toLowerCase?.() || ""] || "#71717A";
 
   return (
     <div style={{ marginLeft: depth * 20 }}>
@@ -197,7 +204,7 @@ function TreeNode({
       </div>
       {hasChildren && !collapsed && (
         <div>
-          {children.map((child: Record<string, any>, i: number) => (
+          {children.map((child: NodeData, i: number) => (
             <TreeNode key={child.id || i} node={child} depth={depth + 1} />
           ))}
         </div>

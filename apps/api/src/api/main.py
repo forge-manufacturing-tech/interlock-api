@@ -2,7 +2,6 @@ import base64
 import csv
 import io
 import os
-from typing import Optional
 from uuid import UUID
 
 import fitz
@@ -21,7 +20,7 @@ from scalar_fastapi import get_scalar_api_reference
 app = FastAPI(title="Interlock API", description="Manufacturing Graph Intelligence")
 
 app.add_middleware(
-    CORSMiddleware,
+    CORSMiddleware,  # type: ignore
     allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
@@ -37,6 +36,7 @@ async def strip_api_prefix(request, call_next):
         request.scope["path"] = request.url.path[4:]
     return await call_next(request)
 
+
 _WORKSPACE = os.environ.get("REPL_HOME", "/home/runner/workspace")
 STATIC_DIR = os.path.join(_WORKSPACE, "frontend", "dist")
 
@@ -45,6 +45,7 @@ STATIC_DIR = os.path.join(_WORKSPACE, "frontend", "dist")
 def read_root():
     if os.path.isdir(STATIC_DIR):
         from starlette.responses import FileResponse
+
         index = os.path.join(STATIC_DIR, "index.html")
         if os.path.isfile(index):
             return FileResponse(index)
@@ -108,7 +109,7 @@ def _describe_image_with_ai(content: bytes, filename: str) -> str:
 @app.post("/agent/chat")
 async def chat_agent(
     message: str = Form(""),
-    file: Optional[UploadFile] = File(None),
+    file: UploadFile | None = File(None),
     current_user: dict = Depends(require_ai_access),
 ):
     """
@@ -185,14 +186,14 @@ def _tree_to_work_instructions(node: dict, depth: int = 0) -> str:
 
     if depth == 0:
         lines.append(f"# Work Instructions: {node_name}")
-        lines.append(f"")
+        lines.append("")
         lines.append(f"**Part ID:** {node.get('id', 'N/A')}")
         lines.append(f"**Status:** {node.get('status', 'N/A')}")
         if node.get("description"):
             lines.append(f"**Description:** {node['description']}")
-        lines.append(f"")
-        lines.append(f"---")
-        lines.append(f"")
+        lines.append("")
+        lines.append("---")
+        lines.append("")
     else:
         prefix = f"{indent}-"
         label = f"**{node_name}**"
@@ -219,21 +220,21 @@ def _tree_to_work_instructions(node: dict, depth: int = 0) -> str:
     other_children = [c for c in children if c.get("type", "").lower() != "operation"]
 
     if operations and depth == 0:
-        lines.append(f"## Assembly Steps")
-        lines.append(f"")
+        lines.append("## Assembly Steps")
+        lines.append("")
         for i, op in enumerate(operations, 1):
             op_type = op.get("op_type", op.get("type", ""))
             lines.append(f"### Step {i}: {op.get('name', 'Operation')} ({op_type})")
             if op.get("description"):
-                lines.append(f"")
+                lines.append("")
                 lines.append(f"{op['description']}")
             op_children = op.get("children", [])
             if op_children:
-                lines.append(f"")
-                lines.append(f"**Required Materials:**")
+                lines.append("")
+                lines.append("**Required Materials:**")
                 for child in op_children:
                     _add_material_line(child, lines, 0)
-            lines.append(f"")
+            lines.append("")
     elif operations:
         for op in operations:
             lines.append(f"{indent}  - **Operation:** {op.get('name', '')} ({op.get('op_type', '')})")
@@ -242,8 +243,8 @@ def _tree_to_work_instructions(node: dict, depth: int = 0) -> str:
 
     if other_children:
         if depth == 0:
-            lines.append(f"## Bill of Materials")
-            lines.append(f"")
+            lines.append("## Bill of Materials")
+            lines.append("")
         for child in other_children:
             sub = _tree_to_work_instructions(child, depth + 1)
             lines.append(sub)
@@ -362,8 +363,8 @@ async def read_tree_structure(
 
 
 if os.path.isdir(STATIC_DIR):
-    from starlette.staticfiles import StaticFiles
     from starlette.responses import FileResponse
+    from starlette.staticfiles import StaticFiles
 
     @app.get("/{full_path:path}")
     async def serve_spa(full_path: str):

@@ -4,7 +4,7 @@ import { DefaultService } from "../api";
 
 export default function IngestPage() {
   const [file, setFile] = useState<File | null>(null);
-  const [result, setResult] = useState<any>(null);
+  const [result, setResult] = useState<unknown>(null);
   const [dragOver, setDragOver] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -13,18 +13,18 @@ export default function IngestPage() {
     onSuccess: (data) => setResult(data),
   });
 
-  const handleFile = (f: File) => {
+  const handleFile = useCallback((f: File) => {
     setFile(f);
     setResult(null);
     mutation.reset();
-  };
+  }, [mutation]);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     setDragOver(false);
     const f = e.dataTransfer.files[0];
     if (f) handleFile(f);
-  }, []);
+  }, [handleFile]);
 
   const handleUpload = () => {
     if (file) mutation.mutate(file);
@@ -55,11 +55,10 @@ export default function IngestPage() {
         onDragLeave={() => setDragOver(false)}
         onDrop={handleDrop}
         onClick={() => inputRef.current?.click()}
-        className={`cursor-pointer rounded-md border-2 border-dashed p-12 text-center transition-colors ${
-          dragOver
-            ? "border-primary bg-primary/5"
-            : "border-border bg-surface-light hover:border-text-muted"
-        }`}
+        className={`cursor-pointer rounded-md border-2 border-dashed p-12 text-center transition-colors ${dragOver
+          ? "border-primary bg-primary/5"
+          : "border-border bg-surface-light hover:border-text-muted"
+          }`}
       >
         <div className="space-y-2">
           <div className="text-4xl text-text-muted">↑</div>
@@ -104,7 +103,7 @@ export default function IngestPage() {
         </div>
       )}
 
-      {result && (
+      {result !== null && (
         <div className="rounded-md border border-border bg-surface-light p-6">
           <h3 className="font-mono text-sm uppercase tracking-wider text-text-secondary mb-3">
             Result

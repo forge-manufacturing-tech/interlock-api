@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
 from database.manager import DatabaseManager
@@ -12,7 +12,6 @@ from .security import (
     hash_password,
     verify_password,
 )
-
 
 _AUTH_DDL: list[str] = [
     """
@@ -71,16 +70,12 @@ def initialize_auth_schema(db: DatabaseManager) -> None:
     }
     for key, value in _DEFAULT_SETTINGS.items():
         try:
-            db.execute_ddl(
-                f"INSERT INTO system_settings (key, value) VALUES ('{key}', '{value}') ON CONFLICT (key) DO NOTHING"
-            )
+            db.execute_ddl(f"INSERT INTO system_settings (key, value) VALUES ('{key}', '{value}') ON CONFLICT (key) DO NOTHING")
         except Exception:
             pass
 
     try:
-        db.execute(
-            "UPDATE users SET role = 'admin', ai_enabled = TRUE WHERE LOWER(email) = 'nathan@interlock-systems.io'"
-        )
+        db.execute("UPDATE users SET role = 'admin', ai_enabled = TRUE WHERE LOWER(email) = 'nathan@interlock-systems.io'")
         db.commit()
     except Exception:
         db.rollback()
@@ -127,9 +122,7 @@ class AuthRepository:
         if not settings.get("signup_enabled", True):
             raise ValueError("Signups are currently disabled")
 
-        existing = self.db.fetch_one(
-            "SELECT id FROM users WHERE email = %s", (email,)
-        )
+        existing = self.db.fetch_one("SELECT id FROM users WHERE email = %s", (email,))
         if existing:
             raise ValueError("A user with this email already exists")
 
@@ -141,7 +134,7 @@ class AuthRepository:
 
         user_id = uuid4()
         pw_hash = hash_password(password)
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
 
         self.db.execute(
             """
@@ -166,9 +159,7 @@ class AuthRepository:
         }
 
     def authenticate_user(self, email: str, password: str) -> dict:
-        row = self.db.fetch_one(
-            "SELECT * FROM users WHERE email = %s", (email,)
-        )
+        row = self.db.fetch_one("SELECT * FROM users WHERE email = %s", (email,))
         if not row:
             raise ValueError("Invalid email or password")
 
@@ -219,7 +210,7 @@ class AuthRepository:
         if not row:
             return None
 
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         self.db.execute(
             "UPDATE api_keys SET last_used_at = %s WHERE id = %s",
             (now, row["key_id"]),
@@ -236,9 +227,7 @@ class AuthRepository:
         }
 
     def list_users(self) -> list[dict]:
-        rows = self.db.fetch_all(
-            "SELECT id, email, name, role, ai_enabled, created_at FROM users ORDER BY created_at ASC"
-        )
+        rows = self.db.fetch_all("SELECT id, email, name, role, ai_enabled, created_at FROM users ORDER BY created_at ASC")
         return [
             {
                 "id": UUID(r["id"]),
@@ -280,7 +269,7 @@ class AuthRepository:
         key_hash = hash_api_key(raw_key)
         last4 = get_api_key_last4(raw_key)
         key_id = uuid4()
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
 
         self.db.execute(
             """
@@ -322,7 +311,7 @@ class AuthRepository:
         ]
 
     def revoke_api_key(self, key_id: UUID, user_id: UUID) -> bool:
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         cur = self.db.execute(
             """
             UPDATE api_keys SET revoked_at = %s
