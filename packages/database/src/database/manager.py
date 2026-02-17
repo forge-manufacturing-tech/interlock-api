@@ -32,8 +32,14 @@ class DatabaseManager:
 
     def _initialize_database(self) -> None:
         try:
+            # psycopg2 doesn't understand "cockroachdb://" protocol, but it works with CockroachDB
+            # as if it were PostgreSQL if we use "postgresql://" or the connection string.
+            psycopg_url = self.config.database_url
+            if psycopg_url.startswith("cockroachdb://"):
+                psycopg_url = "postgresql://" + psycopg_url[len("cockroachdb://") :]
+
             self._conn = psycopg2.connect(
-                self.config.database_url,
+                psycopg_url,
                 cursor_factory=psycopg2.extras.RealDictCursor,
             )
             self._conn.autocommit = False

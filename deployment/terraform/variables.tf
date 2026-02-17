@@ -33,32 +33,6 @@ variable "env_vars" {
   sensitive   = true
 }
 
-# ── Graph Database Storage ───────────────────────────────────────────────────
-
-variable "enable_private_graph" {
-  description = "Whether to create and mount a GCS bucket for the private Kùzu graph DB."
-  type        = bool
-  default     = false
-}
-
-variable "private_graph_bucket_name" {
-  description = "Name of the GCS bucket for private graph storage. Must be globally unique. Defaults to '{project_id}-private-graph' if empty."
-  type        = string
-  default     = ""
-}
-
-variable "enable_public_graph" {
-  description = "Whether to create and mount a GCS bucket for the public Kùzu graph DB."
-  type        = bool
-  default     = false
-}
-
-variable "public_graph_bucket_name" {
-  description = "Name of the GCS bucket for public graph storage. Must be globally unique. Defaults to '{project_id}-public-graph' if empty."
-  type        = string
-  default     = ""
-}
-
 # ── Cloud Run Configuration ──────────────────────────────────────────────────
 
 variable "memory" {
@@ -92,7 +66,7 @@ variable "container_port" {
 }
 
 variable "allow_unauthenticated" {
-  description = "Whether to allow unauthenticated (public) access to the Cloud Run service. May be blocked by org policies."
+  description = "Whether to allow unauthenticated (public) access to the Cloud Run service."
   type        = bool
   default     = false
 }

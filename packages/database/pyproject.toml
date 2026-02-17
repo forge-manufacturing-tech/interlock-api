@@ -10,7 +10,8 @@ dependencies = [
     "sqlalchemy",
     "psycopg2-binary",
     "python-dotenv",
-    "sqlmodel"
+    "sqlmodel",
+    "sqlalchemy-cockroachdb>=2.0.3",
 ]
 
 [build-system]

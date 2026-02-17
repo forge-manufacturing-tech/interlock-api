@@ -123,23 +123,11 @@ mkdir -p "${BUILD_DIR}"
 
 # Copy API application code
 echo "  Copying apps/api..."
-for item in "${SCRIPT_DIR}/apps/api/"*; do
-    basename_item=$(basename "$item")
-    case "$basename_item" in
-        __pycache__|.venv|*.egg-info|start.sh|local_deploy.sh|source.zip|.DS_Store)
-            continue
-            ;;
-    esac
-    if [[ -d "$item" ]]; then
-        cp -r "$item" "${BUILD_DIR}/${basename_item}"
-    else
-        cp "$item" "${BUILD_DIR}/${basename_item}"
-    fi
-done
+cp -r "${SCRIPT_DIR}/apps/api/src/api" "${BUILD_DIR}/api"
 
 # Copy internal packages (flattened for the container)
 echo "  Copying internal packages..."
-for pkg in core parsers ai database; do
+for pkg in core parsers ai database models orm auth; do
     src_layout="${SCRIPT_DIR}/packages/${pkg}/src/${pkg}"
     flat_layout="${SCRIPT_DIR}/packages/${pkg}/${pkg}"
     if [[ -d "$src_layout" ]]; then
@@ -181,7 +169,7 @@ WORKDIR /app
 COPY . .
 RUN pip install --no-cache-dir -r requirements.txt
 
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8080"]
+CMD ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8080"]
 DOCKERFILE
 
 echo "  ✓ Dockerfile generated"
