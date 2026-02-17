@@ -219,7 +219,6 @@ function TreeCard({
             <span className={`font-mono text-sm font-semibold truncate ${isSelected ? 'text-primary' : 'text-text-primary'}`}>
               {root.name || "Unnamed Product"}
             </span>
-            <StatusBadge status={root.status} />
             {partCount !== null && (
               <span className="text-xs text-text-muted">
                 {partCount} part{partCount !== 1 ? "s" : ""}
@@ -367,19 +366,5 @@ function TreeNode({
         </div>
       )}
     </div>
-  );
-}
-
-function StatusBadge({ status }: { status?: string }) {
-  const colors: Record<string, string> = {
-    APPROVED: "bg-green-500/10 text-green-500 ring-green-500/20",
-    PENDING: "bg-yellow-500/10 text-yellow-500 ring-yellow-500/20",
-    REJECTED: "bg-red-500/10 text-red-500 ring-red-500/20",
-  };
-  const cls = status ? colors[status] || "bg-surface text-text-muted ring-border" : "bg-surface text-text-muted ring-border";
-  return (
-    <span className={`inline-flex items-center rounded-full px-2 py-1 text-[10px] font-bold ring-1 ring-inset ${cls}`}>
-      {status || "DRAFT"}
-    </span>
   );
 }
