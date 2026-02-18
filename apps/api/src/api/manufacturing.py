@@ -16,13 +16,17 @@ from orm.main import (
     create_tool,
     delete_part,
     get_ancestors,
+    get_bom,
     get_full_timeline,
     get_leaf_currencies,
+    get_operation,
     get_part,
     list_labor,
     list_tools,
     manufacture_part,
     purchase_part,
+    update_operation,
+    update_operation_inputs,
     update_part,
     validate_tree,
 )
@@ -78,6 +82,22 @@ class CreateToolRequest(BaseModel):
 class ModifyPartRequest(BaseModel):
     name: str | None = None
     description: str | None = None
+
+
+class UpdateOperationRequest(BaseModel):
+    name: str | None = None
+    description: str | None = None
+    instructions: str | None = None
+    yield_rate: float | None = None
+    setup_time_minutes: float | None = None
+    estimated_duration_minutes: float | None = None
+
+
+class UpdateOperationInputsRequest(BaseModel):
+    input_parts: list[QuantityInput] | None = None
+    input_labor: list[QuantityInput] | None = None
+    input_tools: list[QuantityInput] | None = None
+    input_currencies: list[QuantityInput] | None = None
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────
@@ -261,6 +281,72 @@ async def get_part_timeline_endpoint(
         # FastAPI might struggle with strict List[BaseNode] if not handled,
         # allowing implicit dict return is safer here given polymorphic nature.
         return get_full_timeline(part_id)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
+
+@router.get("/parts/{part_id}/bom")
+async def get_part_bom_endpoint(
+    part_id: UUID,
+    quantity: float = 1.0,
+    current_user: dict = Depends(get_current_user),
+):
+    """Get the flattened Bill of Materials for a part and quantity."""
+    try:
+        return get_bom(part_id, quantity)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
+
+# ── Operation Endpoints ────────────────────────────────────────────────
+
+
+@router.patch("/operations/{op_id}", response_model=OperationNode)
+async def patch_operation_endpoint(
+    op_id: UUID,
+    req: UpdateOperationRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    """Update operation details."""
+    op = get_operation(op_id)
+    if not op:
+        raise HTTPException(status_code=404, detail="Operation not found")
+
+    if req.name is not None:
+        op.name = req.name
+    if req.description is not None:
+        op.description = req.description
+    if req.instructions is not None:
+        op.instructions = req.instructions
+    if req.yield_rate is not None:
+        op.yield_rate = req.yield_rate
+    if req.setup_time_minutes is not None:
+        op.setup_time_minutes = req.setup_time_minutes
+    if req.estimated_duration_minutes is not None:
+        op.estimated_duration_minutes = req.estimated_duration_minutes
+
+    try:
+        return update_operation(op)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
+
+@router.put("/operations/{op_id}/inputs")
+async def update_operation_inputs_endpoint(
+    op_id: UUID,
+    req: UpdateOperationInputsRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    """Update operation inputs (parts, labor, tools, currencies)."""
+    try:
+        update_operation_inputs(
+            op_id=op_id,
+            input_parts=req.input_parts,
+            input_labor=req.input_labor,
+            input_tools=req.input_tools,
+            input_currencies=req.input_currencies,
+        )
+        return {"status": "success"}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
 

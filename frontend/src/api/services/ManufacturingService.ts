@@ -7,9 +7,12 @@ import type { CreateLaborRequest } from '../models/CreateLaborRequest';
 import type { CreateToolRequest } from '../models/CreateToolRequest';
 import type { LaborNode } from '../models/LaborNode';
 import type { ModifyPartRequest } from '../models/ModifyPartRequest';
+import type { OperationNode } from '../models/OperationNode';
 import type { PartNode } from '../models/PartNode';
 import type { PurchaseRequest } from '../models/PurchaseRequest';
 import type { ToolNode } from '../models/ToolNode';
+import type { UpdateOperationInputsRequest } from '../models/UpdateOperationInputsRequest';
+import type { UpdateOperationRequest } from '../models/UpdateOperationRequest';
 import type { CancelablePromise } from '../core/CancelablePromise';
 import { OpenAPI } from '../core/OpenAPI';
 import { request as __request } from '../core/request';
@@ -180,6 +183,82 @@ export class ManufacturingService {
             path: {
                 'part_id': partId,
             },
+            errors: {
+                422: `Validation Error`,
+            },
+        });
+    }
+    /**
+     * Get Part Bom Endpoint
+     * Get the flattened Bill of Materials for a part and quantity.
+     * @param partId
+     * @param quantity
+     * @returns any Successful Response
+     * @throws ApiError
+     */
+    public static getPartBomEndpointPartsPartIdBomGet(
+        partId: string,
+        quantity: number = 1,
+    ): CancelablePromise<any> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/parts/{part_id}/bom',
+            path: {
+                'part_id': partId,
+            },
+            query: {
+                'quantity': quantity,
+            },
+            errors: {
+                422: `Validation Error`,
+            },
+        });
+    }
+    /**
+     * Patch Operation Endpoint
+     * Update operation details.
+     * @param opId
+     * @param requestBody
+     * @returns OperationNode Successful Response
+     * @throws ApiError
+     */
+    public static patchOperationEndpointOperationsOpIdPatch(
+        opId: string,
+        requestBody: UpdateOperationRequest,
+    ): CancelablePromise<OperationNode> {
+        return __request(OpenAPI, {
+            method: 'PATCH',
+            url: '/operations/{op_id}',
+            path: {
+                'op_id': opId,
+            },
+            body: requestBody,
+            mediaType: 'application/json',
+            errors: {
+                422: `Validation Error`,
+            },
+        });
+    }
+    /**
+     * Update Operation Inputs Endpoint
+     * Update operation inputs (parts, labor, tools, currencies).
+     * @param opId
+     * @param requestBody
+     * @returns any Successful Response
+     * @throws ApiError
+     */
+    public static updateOperationInputsEndpointOperationsOpIdInputsPut(
+        opId: string,
+        requestBody: UpdateOperationInputsRequest,
+    ): CancelablePromise<any> {
+        return __request(OpenAPI, {
+            method: 'PUT',
+            url: '/operations/{op_id}/inputs',
+            path: {
+                'op_id': opId,
+            },
+            body: requestBody,
+            mediaType: 'application/json',
             errors: {
                 422: `Validation Error`,
             },
