@@ -5,6 +5,10 @@ on:
     branches: ["main"]
     paths:
       - "frontend/**"
+  pull_request:
+    branches: ["main"]
+    paths:
+      - "frontend/**"
   workflow_dispatch:
 
 permissions:
@@ -13,8 +17,8 @@ permissions:
   id-token: write
 
 concurrency:
-  group: "pages"
-  cancel-in-progress: false
+  group: "pages-${{ github.ref }}"
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
   build:
@@ -47,6 +51,7 @@ jobs:
           path: ./frontend/dist
 
   deploy:
+    if: github.ref == 'refs/heads/main'
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
