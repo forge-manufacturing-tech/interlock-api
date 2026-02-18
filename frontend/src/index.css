@@ -1,5 +1,5 @@
-@import "tailwindcss";
 @import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap");
+@import "tailwindcss";
 
 @theme {
   --color-primary: #EC5B13;
@@ -22,6 +22,63 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
-*, *::before, *::after {
+*,
+*::before,
+*::after {
   box-sizing: border-box;
+}
+
+/* React Flow / XYFlow Dark Mode Overrides */
+.react-flow__controls,
+.xyflow__controls {
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5) !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 0 !important;
+  border: 1px solid var(--color-border) !important;
+  border-radius: 8px !important;
+  overflow: hidden !important;
+  background: var(--color-surface-light) !important;
+}
+
+.react-flow__controls-button,
+.xyflow__controls-button {
+  background: var(--color-surface-light) !important;
+  border: none !important;
+  border-bottom: 1px solid var(--color-border) !important;
+  color: var(--color-text-primary) !important;
+  fill: var(--color-text-primary) !important;
+  width: 32px !important;
+  height: 32px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  transition: background-color 0.2s !important;
+}
+
+.react-flow__controls-button:last-child,
+.xyflow__controls-button:last-child {
+  border-bottom: none !important;
+}
+
+.react-flow__controls-button:hover,
+.xyflow__controls-button:hover {
+  background: var(--color-surface) !important;
+}
+
+.react-flow__controls-button svg,
+.xyflow__controls-button svg {
+  fill: var(--color-text-primary) !important;
+  width: 14px !important;
+  height: 14px !important;
+}
+
+.react-flow__background,
+.xyflow__background {
+  background-color: var(--color-surface) !important;
+}
+
+.react-flow__panel,
+.xyflow__panel {
+  color: var(--color-text-primary) !important;
 }

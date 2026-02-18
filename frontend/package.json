@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@tanstack/react-query": "^5.90.21",
+    "@xyflow/react": "^12.10.0",
     "lucide-react": "^0.564.0",
     "openapi-typescript-codegen": "^0.30.0",
     "react": "^19.2.0",
