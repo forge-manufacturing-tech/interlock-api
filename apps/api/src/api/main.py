@@ -1,6 +1,7 @@
 import base64
 import csv
 import io
+import json
 import os
 from uuid import UUID
 
@@ -84,8 +85,8 @@ def _extract_pdf_text(content: bytes) -> str:
 
 def _describe_image_with_ai(content: bytes, filename: str) -> str:
     client = OpenAI(
-        api_key=os.getenv("AI_INTEGRATIONS_OPENAI_API_KEY"),
-        base_url=os.getenv("AI_INTEGRATIONS_OPENAI_BASE_URL"),
+        api_key=os.getenv("OPENROUTER_API_KEY"),
+        base_url=os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1"),
     )
     b64 = base64.b64encode(content).decode("utf-8")
     ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else "png"
@@ -113,12 +114,21 @@ def _describe_image_with_ai(content: bytes, filename: str) -> str:
 async def chat_agent(
     message: str = Form(""),
     file: UploadFile | None = File(None),
+    history: str | None = Form(None),
     current_user: dict = Depends(require_ai_access),
 ):
     """
     Chat with the tech transfer agent.
-    Supports optional file attachments (PDF, images).
+    Supports optional file attachments (PDF, images) and conversation history.
     """
+    # Parse history from JSON string
+    conversation_history: list[dict[str, str]] = []
+    if history:
+        try:
+            conversation_history = json.loads(history)
+        except json.JSONDecodeError:
+            pass  # Ignore invalid JSON, start fresh
+
     parts = []
 
     if file:
@@ -146,10 +156,29 @@ async def chat_agent(
     if not combined.strip():
         raise HTTPException(status_code=400, detail="No message or file provided")
 
+    # Add current user message to history
+    conversation_history.append({"role": "user", "content": combined})
+
     agent = get_tech_transfer_agent()
     try:
-        response = agent.invoke({"question": combined})
-        return {"response": response}
+        response = agent.invoke({"question": combined, "history": conversation_history})
+
+        # Handle dict response from agent (includes tool_calls)
+        if isinstance(response, dict):
+            response_str = str(response.get("response", ""))
+            tool_calls = response.get("tool_calls", [])
+        else:
+            response_str = str(response)
+            tool_calls = []
+
+        # Add assistant response to history
+        conversation_history.append({"role": "assistant", "content": response_str})
+
+        return {
+            "response": response_str,
+            "history": conversation_history,
+            "tool_calls": tool_calls,
+        }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
 

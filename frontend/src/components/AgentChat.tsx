@@ -1,8 +1,10 @@
 import { useState, useRef, useEffect } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import ReactMarkdown from "react-markdown";
 import { DefaultService } from "../api";
-import { Paperclip, Send, X, FileText, Image, Lock } from "lucide-react";
-import { useAuth } from "../lib/auth";
+import { Paperclip, Send, X, FileText, Image, Trash2 } from "lucide-react";
+
+const STORAGE_KEY = "agent-chat-messages";
 
 interface Message {
   role: "user" | "assistant";
@@ -23,35 +25,62 @@ interface ChatFormData {
   history?: string;
 }
 
-export default function AgentPage() {
-  const { hasAiAccess } = useAuth();
-  const [messages, setMessages] = useState<Message[]>([]);
+interface AgentChatProps {
+  className?: string;
+}
+
+function loadMessages(): Message[] {
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY);
+    if (stored) {
+      return JSON.parse(stored) as Message[];
+    }
+  } catch {
+    // Ignore parse errors
+  }
+  return [];
+}
+
+function saveMessages(messages: Message[]) {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(messages));
+  } catch {
+    // Ignore storage errors
+  }
+}
+
+export default function AgentChat({ className = "" }: AgentChatProps) {
+  const [messages, setMessages] = useState<Message[]>(loadMessages);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [attachedFile, setAttachedFile] = useState<File | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const queryClient = useQueryClient();
+
+  // Save messages to localStorage whenever they change
+  useEffect(() => {
+    saveMessages(messages);
+  }, [messages]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  if (!hasAiAccess) {
-    return (
-      <div className="flex h-[calc(100vh-4rem)] flex-col items-center justify-center p-6">
-        <div className="rounded-md border border-border bg-surface-light p-12 text-center max-w-md">
-          <Lock className="mx-auto mb-4 h-12 w-12 text-text-muted" />
-          <h2 className="font-mono text-xl font-bold uppercase tracking-wider text-text-primary mb-2">
-            AI Access Required
-          </h2>
-          <p className="text-text-secondary text-sm">
-            Your account does not have access to the AI manufacturing assistant.
-            Contact an administrator to enable this feature.
-          </p>
-        </div>
-      </div>
-    );
-  }
+  const handleClear = () => {
+    setMessages([]);
+    localStorage.removeItem(STORAGE_KEY);
+  };
+
+  const refetchQueries = () => {
+    // Invalidate and refetch parts and trees queries
+    queryClient.invalidateQueries({ queryKey: ["trees"] });
+    queryClient.invalidateQueries({ queryKey: ["tree"] });
+    queryClient.invalidateQueries({ queryKey: ["parts-all"] });
+    queryClient.invalidateQueries({ queryKey: ["part"] });
+    queryClient.invalidateQueries({ queryKey: ["labor"] });
+    queryClient.invalidateQueries({ queryKey: ["tools"] });
+  };
 
   const handleSend = async () => {
     const text = input.trim();
@@ -73,7 +102,6 @@ export default function AgentPage() {
       const formData: ChatFormData = {};
       if (text) formData.message = text;
       if (fileToSend) formData.file = fileToSend;
-      // Send conversation history
       const history = messages.map((m) => ({
         role: m.role,
         content: m.content,
@@ -86,7 +114,6 @@ export default function AgentPage() {
           ? { response: res, history: [], tool_calls: [] }
           : res;
 
-      // Update messages with history from server
       const newHistory: Message[] = (responseData.history || []).map(
         (m: { role: string; content: string }) => ({
           role: m.role as "user" | "assistant",
@@ -96,6 +123,9 @@ export default function AgentPage() {
         }),
       );
       setMessages(newHistory);
+
+      // Refetch queries after agent responds (agent may update parts/trees)
+      refetchQueries();
     } catch {
       setMessages((prev) => [
         ...prev,
@@ -128,37 +158,35 @@ export default function AgentPage() {
   };
 
   return (
-    <div className="flex h-[calc(100vh-4rem)] flex-col p-6">
-      <div className="mb-4">
-        <h1 className="font-mono text-2xl font-bold uppercase tracking-wider text-text-primary">
-          Manufacturing Assistant
-        </h1>
-        <p className="mt-1 text-text-secondary">
-          Chat with the tech transfer agent. Attach PDFs or images for
-          multimodal analysis.
-        </p>
+    <div className={`flex flex-col ${className}`}>
+      <div className="border-b border-border bg-surface-light px-4 py-3">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="font-mono text-sm font-semibold uppercase tracking-wider text-text-primary">
+              Manufacturing Assistant
+            </h2>
+            <p className="text-xs text-text-muted mt-0.5">
+              Attach PDFs or images for analysis
+            </p>
+          </div>
+          {messages.length > 0 && (
+            <button
+              onClick={handleClear}
+              className="rounded-md border border-border bg-surface-light p-2 text-text-muted transition-colors hover:border-red-500 hover:text-red-500"
+              title="Clear chat"
+            >
+              <Trash2 className="h-4 w-4" />
+            </button>
+          )}
+        </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto rounded-md border border-border bg-surface-light p-4 space-y-3">
+      <div className="flex-1 overflow-y-auto p-3 space-y-2">
         {messages.length === 0 && (
-          <div className="flex h-full flex-col items-center justify-center gap-4">
-            <p className="text-text-muted text-sm">
-              Send a message to start the conversation.
+          <div className="flex h-full flex-col items-center justify-center gap-2 text-center">
+            <p className="text-xs text-text-muted">
+              Ask about your manufacturing data
             </p>
-            <div className="flex flex-wrap gap-2 justify-center">
-              <span className="rounded-full border border-border px-3 py-1 text-xs text-text-muted">
-                PDF analysis
-              </span>
-              <span className="rounded-full border border-border px-3 py-1 text-xs text-text-muted">
-                Image recognition
-              </span>
-              <span className="rounded-full border border-border px-3 py-1 text-xs text-text-muted">
-                BOM extraction
-              </span>
-              <span className="rounded-full border border-border px-3 py-1 text-xs text-text-muted">
-                Manufacturing queries
-              </span>
-            </div>
           </div>
         )}
 
@@ -168,32 +196,31 @@ export default function AgentPage() {
             className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
           >
             <div
-              className={`max-w-[75%] rounded-md px-4 py-3 text-sm ${
+              className={`max-w-[85%] rounded-md px-3 py-2 text-xs ${
                 msg.role === "user"
                   ? "bg-primary/20 text-text-primary"
                   : "bg-surface text-text-secondary"
               }`}
             >
               {msg.fileName && (
-                <div className="mb-2 flex items-center gap-2 rounded border border-border bg-surface-lighter px-2 py-1 text-xs text-text-muted">
+                <div className="mb-2 flex items-center gap-2 rounded border border-border bg-surface-lighter px-2 py-1 text-[10px] text-text-muted">
                   {getFileIcon(msg.fileName)}
                   {msg.fileName}
                 </div>
               )}
-              <div className="prose prose-sm prose-invert max-w-none">
+              <div className="prose prose-xs prose-invert max-w-none">
                 <ReactMarkdown>{msg.content}</ReactMarkdown>
               </div>
 
-              {/* Tool Calls Display */}
               {msg.toolCalls && msg.toolCalls.length > 0 && (
-                <div className="mt-3 space-y-2">
-                  <div className="text-xs font-mono uppercase text-text-muted">
+                <div className="mt-2 space-y-1">
+                  <div className="text-[10px] font-mono uppercase text-text-muted">
                     Tool Calls:
                   </div>
                   {msg.toolCalls.map((tc, j) => (
                     <div
                       key={j}
-                      className="rounded border border-border bg-surface-lighter p-2 text-xs"
+                      className="rounded border border-border bg-surface-lighter p-1.5 text-[10px]"
                     >
                       <div className="font-mono font-semibold text-primary">
                         {tc.tool}
@@ -216,9 +243,9 @@ export default function AgentPage() {
 
         {loading && (
           <div className="flex justify-start">
-            <div className="rounded-md bg-surface px-4 py-3">
-              <div className="flex items-center gap-2 text-sm text-text-muted">
-                <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+            <div className="rounded-md bg-surface px-3 py-2">
+              <div className="flex items-center gap-2 text-xs text-text-muted">
+                <div className="h-3 w-3 animate-spin rounded-full border border-primary border-t-transparent" />
                 Thinking...
               </div>
             </div>
@@ -229,24 +256,24 @@ export default function AgentPage() {
       </div>
 
       {attachedFile && (
-        <div className="mt-2 flex items-center gap-2 rounded-md border border-border bg-surface-light px-3 py-2">
+        <div className="mx-3 mb-2 flex items-center gap-2 rounded border border-border bg-surface-light px-2 py-1.5">
           {getFileIcon(attachedFile.name)}
-          <span className="flex-1 truncate text-sm text-text-secondary">
+          <span className="flex-1 truncate text-xs text-text-secondary">
             {attachedFile.name}
           </span>
-          <span className="text-xs text-text-muted">
+          <span className="text-[10px] text-text-muted">
             {(attachedFile.size / 1024).toFixed(1)} KB
           </span>
           <button
             onClick={() => setAttachedFile(null)}
-            className="rounded p-1 text-text-muted hover:bg-surface-lighter hover:text-text-primary"
+            className="rounded p-0.5 text-text-muted hover:bg-surface-lighter hover:text-text-primary"
           >
-            <X className="h-4 w-4" />
+            <X className="h-3 w-3" />
           </button>
         </div>
       )}
 
-      <div className="mt-3 flex gap-3">
+      <div className="border-t border-border p-3">
         <input
           type="file"
           ref={fileInputRef}
@@ -254,28 +281,30 @@ export default function AgentPage() {
           accept=".pdf,.png,.jpg,.jpeg,.gif,.webp,.csv,.txt,.json,.xlsx"
           className="hidden"
         />
-        <button
-          onClick={() => fileInputRef.current?.click()}
-          className="rounded-md border border-border bg-surface-light p-2.5 text-text-muted transition-colors hover:border-primary hover:text-primary"
-          title="Attach file"
-        >
-          <Paperclip className="h-5 w-5" />
-        </button>
-        <input
-          type="text"
-          placeholder="Ask about your manufacturing data..."
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={handleKeyDown}
-          className="flex-1 rounded-md border border-border bg-surface px-4 py-2.5 text-text-primary placeholder-text-muted outline-none focus:border-primary"
-        />
-        <button
-          onClick={handleSend}
-          disabled={loading || (!input.trim() && !attachedFile)}
-          className="rounded-md bg-primary px-6 py-2.5 font-mono text-sm font-medium uppercase tracking-wider text-white transition-colors hover:bg-primary/90 disabled:opacity-50"
-        >
-          <Send className="h-5 w-5" />
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            className="rounded-md border border-border bg-surface-light p-2 text-text-muted transition-colors hover:border-primary hover:text-primary"
+            title="Attach file"
+          >
+            <Paperclip className="h-4 w-4" />
+          </button>
+          <input
+            type="text"
+            placeholder="Ask..."
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={handleKeyDown}
+            className="flex-1 rounded-md border border-border bg-surface px-3 py-2 text-xs text-text-primary placeholder-text-muted outline-none focus:border-primary"
+          />
+          <button
+            onClick={handleSend}
+            disabled={loading || (!input.trim() && !attachedFile)}
+            className="rounded-md bg-primary p-2 text-white transition-colors hover:bg-primary/90 disabled:opacity-50"
+          >
+            <Send className="h-4 w-4" />
+          </button>
+        </div>
       </div>
     </div>
   );
