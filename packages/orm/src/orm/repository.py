@@ -271,6 +271,11 @@ class GraphRepository:
             part = session.get(PartNode, part_id)
             if not part:
                 return False
+            # Delete all linked tools first
+            linked_tools = session.exec(select(ToolNode).where(ToolNode.linked_part_id == part_id)).all()
+            for tool in linked_tools:
+                session.delete(tool)
+            session.flush()  # Ensure tools are deleted before deleting part
             session.delete(part)
             session.commit()
             return True
