@@ -84,13 +84,14 @@ def _extract_pdf_text(content: bytes) -> str:
     return "\n".join(text_parts)
 
 
-def _pdf_to_images(content: bytes, max_pages: int = 3) -> list[str]:
+def _pdf_to_images(content: bytes, max_pages: int = 10) -> list[str]:
     """Convert the first few pages of a PDF to base64-encoded PNG images."""
     doc = fitz.open(stream=content, filetype="pdf")
     images = []
     for i in range(min(len(doc), max_pages)):
         page = doc[i]
-        pix = page.get_pixmap()
+        # Use 2x zoom for better resolution (144 DPI)
+        pix = page.get_pixmap(matrix=fitz.Matrix(2, 2))
         img_data = pix.tobytes("png")
         b64 = base64.b64encode(img_data).decode("utf-8")
         images.append(f"data:image/png;base64,{b64}")
