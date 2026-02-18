@@ -3,6 +3,7 @@ import csv
 import io
 import json
 import os
+from typing import Any
 from uuid import UUID
 
 import fitz
@@ -83,6 +84,20 @@ def _extract_pdf_text(content: bytes) -> str:
     return "\n".join(text_parts)
 
 
+def _pdf_to_images(content: bytes, max_pages: int = 3) -> list[str]:
+    """Convert the first few pages of a PDF to base64-encoded PNG images."""
+    doc = fitz.open(stream=content, filetype="pdf")
+    images = []
+    for i in range(min(len(doc), max_pages)):
+        page = doc[i]
+        pix = page.get_pixmap()
+        img_data = pix.tobytes("png")
+        b64 = base64.b64encode(img_data).decode("utf-8")
+        images.append(f"data:image/png;base64,{b64}")
+    doc.close()
+    return images
+
+
 def _describe_image_with_ai(content: bytes, filename: str) -> str:
     client = OpenAI(
         api_key=os.getenv("OPENROUTER_API_KEY"),
@@ -95,7 +110,7 @@ def _describe_image_with_ai(content: bytes, filename: str) -> str:
     # the newest OpenAI model is "gpt-5" which was released August 7, 2025.
     # do not change this unless explicitly requested by the user
     response = client.chat.completions.create(
-        model="gpt-5-mini",
+        model="google/gemini-2.0-flash-001",
         messages=[
             {
                 "role": "user",
@@ -122,14 +137,14 @@ async def chat_agent(
     Supports optional file attachments (PDF, images) and conversation history.
     """
     # Parse history from JSON string
-    conversation_history: list[dict[str, str]] = []
+    conversation_history: list[dict[str, Any]] = []
     if history:
         try:
             conversation_history = json.loads(history)
         except json.JSONDecodeError:
             pass  # Ignore invalid JSON, start fresh
 
-    parts = []
+    content_blocks: list[dict[str, Any]] = []
 
     if file:
         file_content = await file.read()
@@ -138,30 +153,41 @@ async def chat_agent(
 
         if ext == "pdf":
             pdf_text = _extract_pdf_text(file_content)
-            parts.append(f"[Extracted from uploaded PDF '{filename}']\n{pdf_text}")
+            content_blocks.append({"type": "text", "text": f"[Extracted text from uploaded PDF '{filename}']\n{pdf_text}"})
+            # Add visual context from PDF pages
+            pdf_images = _pdf_to_images(file_content)
+            for img_url in pdf_images:
+                content_blocks.append({"type": "image_url", "image_url": {"url": img_url}})
         elif ext in ("png", "jpg", "jpeg", "gif", "webp"):
-            description = _describe_image_with_ai(file_content, filename)
-            parts.append(f"[AI analysis of uploaded image '{filename}']\n{description}")
+            mime = {"png": "image/png", "jpg": "image/jpeg", "jpeg": "image/jpeg", "gif": "image/gif", "webp": "image/webp"}.get(ext, f"image/{ext}")
+            b64 = base64.b64encode(file_content).decode("utf-8")
+            content_blocks.append({"type": "text", "text": f"[Uploaded image: {filename}]"})
+            content_blocks.append({"type": "image_url", "image_url": {"url": f"data:{mime};base64,{b64}"}})
         else:
             try:
                 text_content = file_content.decode("utf-8")
-                parts.append(f"[Content of uploaded file '{filename}']\n{text_content}")
+                content_blocks.append({"type": "text", "text": f"[Content of uploaded file '{filename}']\n{text_content}"})
             except UnicodeDecodeError:
-                parts.append(f"[Uploaded binary file '{filename}' — {len(file_content)} bytes, could not decode as text]")
+                content_blocks.append({"type": "text", "text": f"[Uploaded binary file '{filename}' — {len(file_content)} bytes, could not decode as text]"})
 
     if message:
-        parts.append(message)
+        content_blocks.append({"type": "text", "text": message})
 
-    combined = "\n\n".join(parts)
-    if not combined.strip():
+    if not content_blocks:
         raise HTTPException(status_code=400, detail="No message or file provided")
 
+    # Use the list of blocks as the content if multi-modal, otherwise just text string
+    if len(content_blocks) == 1 and content_blocks[0]["type"] == "text":
+        user_content = content_blocks[0]["text"]
+    else:
+        user_content = content_blocks
+
     # Add current user message to history
-    conversation_history.append({"role": "user", "content": combined})
+    conversation_history.append({"role": "user", "content": user_content})
 
     agent = get_tech_transfer_agent()
     try:
-        response = agent.invoke({"question": combined, "history": conversation_history})
+        response = agent.invoke({"question": user_content, "history": conversation_history})
 
         # Handle dict response from agent (includes tool_calls)
         if isinstance(response, dict):

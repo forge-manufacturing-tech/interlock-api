@@ -488,7 +488,7 @@ def _get_llm():
     from langchain_openrouter import ChatOpenRouter
 
     return ChatOpenRouter(
-        model="openai/gpt-oss-safeguard-20b:nitro",
+        model="google/gemini-2.0-flash-001",
         temperature=0.3,
     )
 
@@ -497,7 +497,7 @@ def _get_strong_llm():
     from langchain_openrouter import ChatOpenRouter
 
     return ChatOpenRouter(
-        model="openai/gpt-oss-safeguard-20b:nitro",
+        model="google/gemini-2.0-flash-001",
         temperature=0.3,
     )
 
@@ -529,7 +529,7 @@ def get_tech_transfer_agent():
 
     def input_adapter(inputs: dict) -> dict:
         # Build message list from history + current question
-        from langchain_core.messages import HumanMessage
+        from langchain_core.messages import AIMessage, HumanMessage
 
         messages = []
         history = inputs.get("history", [])
