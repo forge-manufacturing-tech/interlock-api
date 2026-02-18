@@ -2,7 +2,10 @@
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
-export type ApiKeyCreate = {
-    name: string;
-};
-
+/**
+ * Discriminator for operations.
+ */
+export enum OpType {
+    STANDARD = 'STANDARD',
+    PURCHASE = 'PURCHASE',
+}

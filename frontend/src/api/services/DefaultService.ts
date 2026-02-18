@@ -63,7 +63,7 @@ export class DefaultService {
     /**
      * Chat Agent
      * Chat with the tech transfer agent.
-     * Supports optional file attachments (PDF, images).
+     * Supports optional file attachments (PDF, images) and conversation history.
      * @param formData
      * @returns any Successful Response
      * @throws ApiError

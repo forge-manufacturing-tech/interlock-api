@@ -1,7 +1,7 @@
 /* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
- 
+/* eslint-disable */
 /**
  * A physical thing: raw material, sub-assembly, or finished product.
  * Each part is created by exactly one operation (purchase or assembly).
