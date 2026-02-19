@@ -1,7 +1,7 @@
 /* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
- 
+/* eslint-disable */
 export { ApiError } from './core/ApiError';
 export { CancelablePromise, CancelError } from './core/CancelablePromise';
 export { OpenAPI } from './core/OpenAPI';
@@ -17,12 +17,17 @@ export type { CreateToolRequest } from './models/CreateToolRequest';
 export type { HTTPValidationError } from './models/HTTPValidationError';
 export type { LaborNode } from './models/LaborNode';
 export type { ModifyPartRequest } from './models/ModifyPartRequest';
+export type { OperationNode } from './models/OperationNode';
+export { OpType } from './models/OpType';
 export type { PartNode } from './models/PartNode';
 export type { PurchaseRequest } from './models/PurchaseRequest';
+export type { QuantityInput } from './models/QuantityInput';
 export type { SystemSettings } from './models/SystemSettings';
 export type { SystemSettingUpdate } from './models/SystemSettingUpdate';
 export type { TokenResponse } from './models/TokenResponse';
 export type { ToolNode } from './models/ToolNode';
+export type { UpdateOperationInputsRequest } from './models/UpdateOperationInputsRequest';
+export type { UpdateOperationRequest } from './models/UpdateOperationRequest';
 export type { UserCreate } from './models/UserCreate';
 export type { UserLogin } from './models/UserLogin';
 export type { UserRead } from './models/UserRead';

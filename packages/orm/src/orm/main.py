@@ -80,6 +80,9 @@ __all__ = [
     "get_ancestors",
     "get_leaf_currencies",
     "get_tree_json",
+    "get_bom",
+    # Operation Updates
+    "update_operation_inputs",
     # Validation
     "validate_tree",
 ]
@@ -368,6 +371,34 @@ def get_tree_json(
     db: DatabaseManager | None = None,
 ) -> dict:
     return _repo(db).get_tree_json(part_id)
+
+
+def get_bom(
+    part_id: UUID,
+    quantity: float = 1.0,
+    db: DatabaseManager | None = None,
+) -> list[dict]:
+    return _repo(db).get_bom(part_id, quantity)
+
+
+# ── Operation Updates ──────────────────────────────────────────────
+
+
+def update_operation_inputs(
+    op_id: UUID,
+    input_parts: list[QuantityInput] | None = None,
+    input_labor: list[QuantityInput] | None = None,
+    input_tools: list[QuantityInput] | None = None,
+    input_currencies: list[QuantityInput] | None = None,
+    db: DatabaseManager | None = None,
+) -> None:
+    return _repo(db).update_operation_inputs(
+        op_id=op_id,
+        input_parts=input_parts,
+        input_labor=input_labor,
+        input_tools=input_tools,
+        input_currencies=input_currencies,
+    )
 
 
 # ── Validation ────────────────────────────────────────────────────

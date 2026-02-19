@@ -45,7 +45,7 @@ from models.main import (
     ToolNode,
     ToolQuantity,
 )
-from sqlmodel import col, select
+from sqlmodel import col, delete, select
 
 # ── Validation data classes ────────────────────────────────────────
 
@@ -505,6 +505,8 @@ class GraphRepository:
                 "id": str(part.id),
                 "name": part.name,
                 "type": "part",
+                "description": part.description,
+                "unit_of_measure": part.unit_of_measure,
                 "children": [],
             }
 
@@ -517,6 +519,10 @@ class GraphRepository:
                         "name": op.name,
                         "type": "operation",
                         "op_type": op.op_type.value,
+                        "yield_rate": op.yield_rate,
+                        "setup_time_minutes": op.setup_time_minutes,
+                        "estimated_duration_minutes": op.estimated_duration_minutes,
+                        "instructions": op.instructions,
                         "children": [],
                     }
                     res["children"].append(op_node)
@@ -557,6 +563,93 @@ class GraphRepository:
 
             res["unit_cost"] = total_unit_cost
             return res
+
+    def get_bom(self, part_id: UUID, quantity: float = 1.0) -> list[dict]:
+        """
+        Calculate a flattened Bill of Materials for *quantity* units of *part_id*.
+        Only includes parts created by PURCHASE operations (raw materials).
+        """
+        bom_map: dict[UUID, dict] = {}  # part_id -> {part_id, name, quantity, unit, unit_cost}
+
+        def traverse(p_id: UUID, target_qty: float):
+            with self.db.session as session:
+                part = session.get(PartNode, p_id)
+                if not part:
+                    return
+
+                op = self.get_created_by(p_id)
+                if not op:
+                    return
+
+                # To get target_qty good units, we need to produce target_qty / yield_rate
+                needed_qty = target_qty / op.yield_rate
+
+                if op.op_type == OpType.PURCHASE:
+                    if p_id not in bom_map:
+                        # Calculate unit cost for purchase from currency inputs
+                        statement = select(OperationInputCurrency.quantity).where(OperationInputCurrency.operation_id == op.id)
+                        unit_cost = sum(session.exec(statement).all())
+
+                        bom_map[p_id] = {
+                            "part_id": str(p_id),
+                            "name": part.name,
+                            "quantity": 0.0,
+                            "unit": part.unit_of_measure,
+                            "unit_cost": unit_cost,
+                        }
+                    bom_map[p_id]["quantity"] += needed_qty
+                else:
+                    # STANDARD op
+                    # Get input parts
+                    statement = select(OperationInputParts.part_id, OperationInputParts.quantity).where(OperationInputParts.operation_id == op.id)
+                    for inp_p_id, inp_qty in session.exec(statement):
+                        traverse(inp_p_id, needed_qty * inp_qty)
+
+        traverse(part_id, quantity)
+
+        # Finalize total costs
+        results = []
+        for item in bom_map.values():
+            item["total_cost"] = item["quantity"] * item["unit_cost"]
+            results.append(item)
+
+        return results
+
+    def update_operation_inputs(
+        self,
+        op_id: UUID,
+        input_parts: list[QuantityInput] | None = None,
+        input_labor: list[QuantityInput] | None = None,
+        input_tools: list[QuantityInput] | None = None,
+        input_currencies: list[QuantityInput] | None = None,
+    ) -> None:
+        """Atomically replace all inputs for an operation."""
+        with self.db.session as session:
+            try:
+                if input_parts is not None:
+                    session.exec(delete(OperationInputParts).where(col(OperationInputParts.operation_id) == op_id))
+                    for p_in in input_parts:
+                        session.add(OperationInputParts(operation_id=op_id, part_id=p_in.resource_id, quantity=p_in.quantity, unit=p_in.unit))
+
+                if input_labor is not None:
+                    session.exec(delete(OperationInputLabor).where(col(OperationInputLabor.operation_id) == op_id))
+                    for l_in in input_labor:
+                        session.add(OperationInputLabor(operation_id=op_id, labor_id=l_in.resource_id, quantity=l_in.quantity, unit=l_in.unit))
+
+                if input_tools is not None:
+                    session.exec(delete(OperationInputTools).where(col(OperationInputTools.operation_id) == op_id))
+                    for t_in in input_tools:
+                        session.add(OperationInputTools(operation_id=op_id, tool_id=t_in.resource_id, quantity=t_in.quantity, unit=t_in.unit))
+
+                if input_currencies is not None:
+                    session.exec(delete(OperationInputCurrency).where(col(OperationInputCurrency.operation_id) == op_id))
+                    for c_in in input_currencies:
+                        session.add(OperationInputCurrency(operation_id=op_id, currency_id=c_in.resource_id, quantity=c_in.quantity, unit=c_in.unit))
+
+                session.commit()
+            except Exception:
+                session.rollback()
+                raise
 
     # ===============================================================
     # Validation
