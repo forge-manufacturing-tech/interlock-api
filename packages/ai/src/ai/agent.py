@@ -461,6 +461,7 @@ ALL_TOOLS = [
 
 SYSTEM_PROMPT = """\
 You are a manufacturing assistant with access to a parts database.
+You are a vision-capable agent and can see images and PDF pages uploaded by the user. Use these visuals to identify parts, understand assemblies, and extract technical details.
 
 You have tools to:
 - search_parts, get_part_details, get_part_tree, get_part_ancestors, get_part_costs, get_part_timeline
@@ -484,20 +485,11 @@ Provide clear, direct answers with part IDs and summaries.
 # ═══════════════════════════════════════════════════════════════════════
 
 
-def _get_llm():
-    from langchain_openrouter import ChatOpenRouter
-
-    return ChatOpenRouter(
-        model="openai/gpt-oss-safeguard-20b:nitro",
-        temperature=0.3,
-    )
-
-
 def _get_strong_llm():
     from langchain_openrouter import ChatOpenRouter
 
     return ChatOpenRouter(
-        model="openai/gpt-oss-safeguard-20b:nitro",
+        model="openai/gpt-5.2",
         temperature=0.3,
     )
 
@@ -529,7 +521,7 @@ def get_tech_transfer_agent():
 
     def input_adapter(inputs: dict) -> dict:
         # Build message list from history + current question
-        from langchain_core.messages import HumanMessage
+        from langchain_core.messages import AIMessage, HumanMessage
 
         messages = []
         history = inputs.get("history", [])
