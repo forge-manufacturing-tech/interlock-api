@@ -19,14 +19,14 @@ export default function Navbar() {
       <div className="flex items-center gap-3">
         <Link
           to="/login"
-          className="rounded-md px-4 py-2 text-sm font-medium text-text-secondary transition-colors hover:text-text-primary no-underline"
+          className="rounded-md px-4 py-2 font-mono text-sm font-medium text-text-secondary transition-colors hover:text-text-primary no-underline"
         >
           LOG IN
         </Link>
         {signupEnabled && (
           <Link
             to="/signup"
-            className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary/90 no-underline"
+            className="rounded-md border border-primary bg-surface px-4 py-2 font-mono text-sm font-medium text-primary transition-colors hover:bg-primary/10 no-underline"
           >
             GET STARTED
           </Link>
