@@ -2,6 +2,7 @@ import base64
 import csv
 import io
 import json
+import logging
 import os
 from typing import Any
 from uuid import UUID
@@ -207,6 +208,14 @@ async def chat_agent(
             "tool_calls": tool_calls,
         }
     except Exception as e:
+        logger = logging.getLogger("api")
+        logger.exception(
+            "Error in /agent/chat endpoint | message=%s | file=%s | error_type=%s | error_details=%s",
+            message,
+            file.filename if file else None,
+            type(e).__name__,
+            str(e),
+        )
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
