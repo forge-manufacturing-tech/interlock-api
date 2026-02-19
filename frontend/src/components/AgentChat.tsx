@@ -6,6 +6,28 @@ import { Paperclip, Send, X, FileText, Image, Trash2 } from "lucide-react";
 
 const STORAGE_KEY = "agent-chat-messages";
 
+// Type for content blocks from multimodal messages
+type ContentBlock =
+  | { type: "text"; text: string }
+  | { type: "image_url"; image_url: { url: string } };
+
+// Helper to normalize content (handles both string and content block arrays)
+function normalizeContent(content: string | ContentBlock[]): string {
+  if (typeof content === "string") {
+    return content;
+  }
+  if (Array.isArray(content)) {
+    return content
+      .filter(
+        (block): block is { type: "text"; text: string } =>
+          block.type === "text",
+      )
+      .map((block) => block.text)
+      .join("\n");
+  }
+  return String(content);
+}
+
 interface Message {
   role: "user" | "assistant";
   content: string;
@@ -115,9 +137,9 @@ export default function AgentChat({ className = "" }: AgentChatProps) {
           : res;
 
       const newHistory: Message[] = (responseData.history || []).map(
-        (m: { role: string; content: string }) => ({
+        (m: { role: string; content: string | ContentBlock[] }) => ({
           role: m.role as "user" | "assistant",
-          content: m.content,
+          content: normalizeContent(m.content as string | ContentBlock[]),
           toolCalls:
             m.role === "assistant" ? responseData.tool_calls : undefined,
         }),

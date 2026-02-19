@@ -485,20 +485,11 @@ Provide clear, direct answers with part IDs and summaries.
 # ═══════════════════════════════════════════════════════════════════════
 
 
-def _get_llm():
-    from langchain_openrouter import ChatOpenRouter
-
-    return ChatOpenRouter(
-        model="google/gemini-2.0-flash-001",
-        temperature=0.3,
-    )
-
-
 def _get_strong_llm():
     from langchain_openrouter import ChatOpenRouter
 
     return ChatOpenRouter(
-        model="google/gemini-2.0-flash-001",
+        model="openai/gpt-5.2",
         temperature=0.3,
     )
 
