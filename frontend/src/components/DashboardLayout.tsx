@@ -23,7 +23,7 @@ export default function DashboardLayout() {
 
   const showAgentSidebar =
     location.pathname === "/dashboard" ||
-    location.pathname === "/dashboard/trees";
+    location.pathname.startsWith("/dashboard/parts/");
 
   const navItems = [
     {
@@ -32,20 +32,6 @@ export default function DashboardLayout() {
       label: "Parts Explorer",
       end: true,
       show: true,
-    },
-    {
-      to: "/dashboard/trees",
-      icon: GitBranch,
-      label: "Tree Visualizer",
-      show: true,
-    },
-    { to: "/dashboard/ingest", icon: Upload, label: "BOM Ingest", show: true },
-    { to: "/dashboard/api-keys", icon: Key, label: "API Keys", show: true },
-    {
-      to: "/dashboard/admin",
-      icon: Users,
-      label: "User Management",
-      show: isAdmin,
     },
   ];
 
@@ -147,7 +133,7 @@ export default function DashboardLayout() {
             sidebar={<AgentChat className="h-full" />}
           />
         ) : (
-          <div className="flex-1 overflow-auto p-6 scrollbar-thin scrollbar-thumb-border scrollbar-track-transparent">
+          <div className={`flex-1 overflow-auto scrollbar-thin scrollbar-thumb-border scrollbar-track-transparent ${location.pathname.startsWith('/dashboard/parts/') ? '' : 'p-6'}`}>
             <Outlet />
           </div>
         )}
