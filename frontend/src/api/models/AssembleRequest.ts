@@ -1,7 +1,6 @@
 /* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
- 
 export type AssembleRequest = {
     name: string;
     input_part_ids: Array<string>;

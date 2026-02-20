@@ -1,8 +1,9 @@
 /* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
-/* eslint-disable */
 import type { Body_chat_agent_agent_chat_post } from '../models/Body_chat_agent_agent_chat_post';
+import type { Body_chat_session_stream_agent_sessions__session_id__chat_post } from '../models/Body_chat_session_stream_agent_sessions__session_id__chat_post';
+import type { Body_create_session_endpoint_agent_sessions_post } from '../models/Body_create_session_endpoint_agent_sessions_post';
 import type { Body_ingest_bom_ingest_bom_post } from '../models/Body_ingest_bom_ingest_bom_post';
 import type { PartNode } from '../models/PartNode';
 import type { CancelablePromise } from '../core/CancelablePromise';
@@ -53,6 +54,84 @@ export class DefaultService {
         return __request(OpenAPI, {
             method: 'POST',
             url: '/ingest/bom',
+            formData: formData,
+            mediaType: 'multipart/form-data',
+            errors: {
+                422: `Validation Error`,
+            },
+        });
+    }
+    /**
+     * List Sessions Endpoint
+     * List all chat sessions for the current user.
+     * @returns any Successful Response
+     * @throws ApiError
+     */
+    public static listSessionsEndpointAgentSessionsGet(): CancelablePromise<any> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/agent/sessions',
+        });
+    }
+    /**
+     * Create Session Endpoint
+     * Create a new chat session.
+     * @param formData
+     * @returns any Successful Response
+     * @throws ApiError
+     */
+    public static createSessionEndpointAgentSessionsPost(
+        formData?: Body_create_session_endpoint_agent_sessions_post,
+    ): CancelablePromise<any> {
+        return __request(OpenAPI, {
+            method: 'POST',
+            url: '/agent/sessions',
+            formData: formData,
+            mediaType: 'application/x-www-form-urlencoded',
+            errors: {
+                422: `Validation Error`,
+            },
+        });
+    }
+    /**
+     * Get Session Messages Endpoint
+     * Get all messages for a specific session.
+     * @param sessionId
+     * @returns any Successful Response
+     * @throws ApiError
+     */
+    public static getSessionMessagesEndpointAgentSessionsSessionIdMessagesGet(
+        sessionId: string,
+    ): CancelablePromise<any> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/agent/sessions/{session_id}/messages',
+            path: {
+                'session_id': sessionId,
+            },
+            errors: {
+                422: `Validation Error`,
+            },
+        });
+    }
+    /**
+     * Chat Session Stream
+     * Chat with the agent in a specific session with streaming updates.
+     * @param sessionId
+     * @param formData
+     * @returns any Successful Response
+     * @throws ApiError
+     */
+    public static chatSessionStreamAgentSessionsSessionIdChatPost(
+        sessionId: string,
+        formData?: Body_chat_session_stream_agent_sessions__session_id__chat_post,
+    ): CancelablePromise<any> {
+        return __request(OpenAPI, {
+            method: 'POST',
+            url: '/agent/sessions/{session_id}/chat',
+            path: {
+                'session_id': sessionId,
+            },
             formData: formData,
             mediaType: 'multipart/form-data',
             errors: {

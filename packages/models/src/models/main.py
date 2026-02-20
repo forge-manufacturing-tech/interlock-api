@@ -8,6 +8,7 @@ from pydantic import ConfigDict
 from sqlalchemy import JSON, Column, ForeignKey
 from sqlmodel import Field, SQLModel
 
+from .chat import ChatMessage, ChatSession
 from .inputs import CurrencyAmount
 
 # --- Enums ---
@@ -219,4 +220,6 @@ __all__ = [
     "OperationInputLabor",
     "OperationInputTools",
     "OperationInputCurrency",
+    "ChatSession",
+    "ChatMessage",
 ]
