@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { ManufacturingService } from "../../api";
+import { ManufacturingService, DefaultService } from "../../api";
 import type { PartNode } from "../../api";
 import {
   X,
@@ -14,6 +14,7 @@ import {
   Cuboid,
   Hammer,
   Package,
+  Plus,
 } from "lucide-react";
 import BOMWizardModal from "./BOMWizardModal";
 
@@ -60,17 +61,23 @@ export default function PartDetailPanel({
   );
 
   // Input quantities state
-  const initialInputs = operation?.children || node.children || [];
-  const [inputQtys, setInputQtys] = useState<Record<string, number>>(
-    Object.fromEntries(
-      initialInputs.map((c) => [c.id!, Number(c.quantity || 0)]),
-    ),
-  );
-  const [inputUnits, setInputUnits] = useState<Record<string, string>>(
-    Object.fromEntries(
-      initialInputs.map((c) => [c.id!, (c.unit as string) || ""]),
-    ),
-  );
+  const initialInputs = useMemo(() => operation?.children || node.children || [], [operation, node]);
+  const [inputQtys, setInputQtys] = useState<Record<string, number>>({});
+  const [inputUnits, setInputUnits] = useState<Record<string, string>>({});
+  const [activeInputs, setActiveInputs] = useState<NodeData[]>([]);
+
+  // Initialize state when initialInputs changes or when entering edit mode
+  useMemo(() => {
+    setActiveInputs(initialInputs as NodeData[]);
+    setInputQtys(Object.fromEntries(initialInputs.map((c) => [c.id!, Number(c.quantity || 0)])));
+    setInputUnits(Object.fromEntries(initialInputs.map((c) => [c.id!, (c.unit as string) || ""])));
+  }, [initialInputs]);
+
+  const { data: allParts } = useQuery({
+    queryKey: ["trees"],
+    queryFn: () => DefaultService.readTreesTreesGet(),
+    enabled: isEditing,
+  });
 
   const { data: ancestors } = useQuery({
     queryKey: ["part", node.id, "ancestors"],
@@ -133,32 +140,31 @@ export default function PartDetailPanel({
       );
 
       // 2. Update operation inputs
-      const opChildren = operation.children || [];
       await ManufacturingService.updateOperationInputsEndpointOperationsOpIdInputsPut(
         operation.id as string,
         {
-          input_parts: opChildren
+          input_parts: activeInputs
             .filter((c) => c.type === "part" || !c.type)
             .map((c) => ({
               resource_id: c.id!,
               quantity: inputQtys[c.id!] ?? 0,
               unit: inputUnits[c.id!] ?? "each",
             })),
-          input_labor: opChildren
+          input_labor: activeInputs
             .filter((c) => c.type === "labor")
             .map((c) => ({
               resource_id: c.id!,
               quantity: inputQtys[c.id!] ?? 0,
               unit: inputUnits[c.id!] ?? "hours",
             })),
-          input_tools: opChildren
+          input_tools: activeInputs
             .filter((c) => c.type === "tool")
             .map((c) => ({
               resource_id: c.id!,
               quantity: inputQtys[c.id!] ?? 0,
               unit: inputUnits[c.id!] ?? "hours",
             })),
-          input_currencies: opChildren
+          input_currencies: activeInputs
             .filter((c) => c.type === "currency")
             .map((c) => ({
               resource_id: c.id!,
@@ -190,10 +196,21 @@ export default function PartDetailPanel({
     }
   };
 
-  const inputs = operation?.children || node.children || [];
+  const inputs = isEditing ? activeInputs : (operation?.children || node.children || []);
+
+  const handleAddInput = (part: PartNode) => {
+    if (activeInputs.some(i => i.id === part.id)) return;
+    setActiveInputs([...activeInputs, { ...part, type: 'part', quantity: 1 } as NodeData]);
+    setInputQtys({ ...inputQtys, [part.id!]: 1 });
+    setInputUnits({ ...inputUnits, [part.id!]: part.unit_of_measure || 'each' });
+  };
+
+  const handleRemoveInput = (id: string) => {
+    setActiveInputs(activeInputs.filter(i => i.id !== id));
+  };
 
   // Group inputs by type for better display
-  const childParts = inputs.filter((c) => c.type === "part" || !c.type);
+  const childParts = (inputs as NodeData[]).filter((c) => c.type === "part" || !c.type);
   const childLabor = inputs.filter((c) => c.type === "labor");
   const childTools = inputs.filter((c) => c.type === "tool");
   const childCurrencies = inputs.filter((c) => c.type === "currency");
@@ -356,10 +373,30 @@ export default function PartDetailPanel({
 
           {/* Downstream Inputs */}
           <div className="space-y-3">
-            <h4 className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-text-muted">
-              <ArrowDownRight size={14} />
-              Inputs
-            </h4>
+            <div className="flex items-center justify-between">
+              <h4 className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-text-muted">
+                <ArrowDownRight size={14} />
+                Inputs
+              </h4>
+              {isEditing && (
+                <div className="relative group">
+                  <button className="p-1 rounded bg-primary/10 text-primary hover:bg-primary/20 transition-colors">
+                    <Plus size={14} />
+                  </button>
+                  <div className="absolute right-0 top-full mt-1 hidden group-hover:block z-30 bg-surface-light border border-border rounded shadow-xl max-h-48 overflow-y-auto w-48">
+                    {allParts?.filter(p => p.id !== node.id).map(p => (
+                      <button
+                        key={p.id}
+                        onClick={() => handleAddInput(p)}
+                        className="w-full text-left px-3 py-2 text-[10px] hover:bg-primary/10 transition-colors border-b border-border last:border-0"
+                      >
+                        {p.name}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
             {childParts.length === 0 ? (
               <p className="text-xs text-text-muted italic">No input parts.</p>
             ) : (
@@ -367,8 +404,16 @@ export default function PartDetailPanel({
                 {childParts.map((c) => (
                   <div
                     key={c.id}
-                    className="w-full text-left p-2 rounded bg-surface-light border border-border"
+                    className="w-full text-left p-2 rounded bg-surface-light border border-border relative group"
                   >
+                    {isEditing && (
+                      <button
+                        onClick={() => handleRemoveInput(c.id!)}
+                        className="absolute -top-2 -right-2 p-1 bg-destructive text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                      >
+                        <X size={10} />
+                      </button>
+                    )}
                     <button
                       onClick={() => onSelect(c)}
                       className="w-full text-left group"

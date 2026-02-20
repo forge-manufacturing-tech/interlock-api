@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from 'react';
+import { useCallback, useMemo, useEffect } from 'react';
 import {
     ReactFlow,
     Handle,
@@ -12,8 +12,7 @@ import {
     useEdgesState,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import '@xyflow/react/dist/style.css';
-import { Box, Hammer, Coins, User, Square, type LucideIcon } from 'lucide-react';
+import { Box, Hammer, Coins, User, Square, Plus, type LucideIcon } from 'lucide-react';
 import type { NodeData } from '../../types/parts';
 
 
@@ -26,7 +25,7 @@ const NODE_TYPE_ICONS: Record<string, LucideIcon> = {
 };
 
 const NODE_TYPE_COLORS: Record<string, string> = {
-    part: "#3B82F6", // Blue
+    part: "#EC5B13", // Brand Orange
     operation: "#8B5CF6", // Purple
     currency: "#10B981", // Green
     labor: "#F59E0B", // Amber
@@ -34,7 +33,7 @@ const NODE_TYPE_COLORS: Record<string, string> = {
 };
 
 // Custom Node Component
-const CustomPartNode = ({ data }: { data: NodeData & { selected?: boolean } }) => {
+const CustomPartNode = ({ data }: { data: NodeData & { selected?: boolean, onAddChild?: (node: NodeData) => void } }) => {
     const nodeType = data.type?.toLowerCase() || 'part';
     const Icon = NODE_TYPE_ICONS[nodeType] || Box;
     const color = NODE_TYPE_COLORS[nodeType] || "#71717A";
@@ -53,6 +52,19 @@ const CustomPartNode = ({ data }: { data: NodeData & { selected?: boolean } }) =
                     }`}
             >
                 <Handle type="target" position={Position.Top} className="!w-3 !h-3 !bg-border !border-2 !border-surface" />
+
+                <div
+                    onClick={(e) => {
+                        if (data.onAddChild) {
+                            e.stopPropagation();
+                            data.onAddChild(data);
+                        }
+                    }}
+                    className="absolute -right-3 -top-3 p-1.5 rounded-full bg-primary text-white shadow-lg hover:scale-110 transition-transform cursor-pointer z-10 opacity-0 group-hover:opacity-100"
+                    title="Add Child Component"
+                >
+                    <Plus size={16} strokeWidth={3} />
+                </div>
 
                 <div className="flex items-start gap-3">
                     <div
@@ -108,10 +120,11 @@ const nodeTypes = {
 interface PartFlowVisualizerProps {
     treeData: NodeData;
     onSelectNode: (node: NodeData) => void;
+    onAddChild?: (node: NodeData) => void;
     selectedId?: string;
 }
 
-export default function PartFlowVisualizer({ treeData, onSelectNode, selectedId }: PartFlowVisualizerProps) {
+export default function PartFlowVisualizer({ treeData, onSelectNode, onAddChild, selectedId }: PartFlowVisualizerProps) {
     const { nodes: initialNodes, edges: initialEdges } = useMemo(() => {
         const nodes: Node[] = [];
         const edges: Edge[] = [];
@@ -124,10 +137,11 @@ export default function PartFlowVisualizer({ treeData, onSelectNode, selectedId 
             nodes.push({
                 id,
                 type: 'partNode',
-                position: { x: x * 300, y: depth * 180 },
+                position: { x: x * 300, y: depth * 220 },
                 data: {
                     ...node,
-                    selected: selectedId === node.id
+                    selected: selectedId === node.id,
+                    onAddChild
                 },
             });
 
@@ -154,8 +168,13 @@ export default function PartFlowVisualizer({ treeData, onSelectNode, selectedId 
         return { nodes, edges };
     }, [treeData, selectedId]);
 
-    const [nodes, , onNodesChange] = useNodesState(initialNodes);
-    const [edges, , onEdgesChange] = useEdgesState(initialEdges);
+    const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
+    const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
+
+    useEffect(() => {
+        setNodes(initialNodes);
+        setEdges(initialEdges);
+    }, [initialNodes, initialEdges, setNodes, setEdges]);
 
     const onNodeClick = useCallback((_event: React.MouseEvent, node: Node) => {
         onSelectNode(node.data as NodeData);

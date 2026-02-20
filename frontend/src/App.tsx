@@ -7,6 +7,7 @@ const LoginPage = lazy(() => import("./pages/LoginPage"));
 const SignupPage = lazy(() => import("./pages/SignupPage"));
 const DashboardLayout = lazy(() => import("./components/DashboardLayout"));
 const PartsPage = lazy(() => import("./pages/PartsPage"));
+const PartVisualizerPage = lazy(() => import("./pages/PartVisualizerPage"));
 const TreesPage = lazy(() => import("./pages/TreesPage"));
 const IngestPage = lazy(() => import("./pages/IngestPage"));
 const AgentPage = lazy(() => import("./pages/AgentPage"));
@@ -35,6 +36,7 @@ export default function App() {
           }
         >
           <Route index element={<PartsPage />} />
+          <Route path="parts/:partId" element={<PartVisualizerPage />} />
           <Route path="trees" element={<TreesPage />} />
           <Route path="ingest" element={<IngestPage />} />
           <Route path="agent" element={<AgentPage />} />
