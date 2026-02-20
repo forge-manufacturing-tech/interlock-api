@@ -37,6 +37,7 @@ export default function AgentPage() {
   const [attachedFile, setAttachedFile] = useState<File | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const isSendingRef = useRef(false);
 
   useEffect(() => {
     if (hasAiAccess) {
@@ -46,7 +47,11 @@ export default function AgentPage() {
 
   useEffect(() => {
     if (currentSessionId) {
-      loadMessages(currentSessionId);
+      // Avoid overwriting optimistic state if we are currently sending a message
+      // for this session (e.g. just created it)
+      if (!isSendingRef.current) {
+        loadMessages(currentSessionId);
+      }
     } else {
       setMessages([]);
     }
@@ -103,6 +108,7 @@ export default function AgentPage() {
     const fileToSend = attachedFile;
     setAttachedFile(null);
     setLoading(true);
+    isSendingRef.current = true;
 
     try {
       if (!sessionId) {
@@ -200,6 +206,7 @@ export default function AgentPage() {
       ]);
     } finally {
       setLoading(false);
+      isSendingRef.current = false;
     }
   };
 

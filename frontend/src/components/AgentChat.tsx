@@ -48,6 +48,7 @@ export default function AgentChat({ className = "" }: AgentChatProps) {
 
   const bottomRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const isSendingRef = useRef(false);
   const queryClient = useQueryClient();
 
   useEffect(() => {
@@ -59,7 +60,9 @@ export default function AgentChat({ className = "" }: AgentChatProps) {
   useEffect(() => {
     if (currentSessionId) {
       localStorage.setItem(STORAGE_SESSION_KEY, currentSessionId);
-      loadMessages(currentSessionId);
+      if (!isSendingRef.current) {
+        loadMessages(currentSessionId);
+      }
     } else {
       localStorage.removeItem(STORAGE_SESSION_KEY);
       setMessages([]);
@@ -126,6 +129,7 @@ export default function AgentChat({ className = "" }: AgentChatProps) {
     const fileToSend = attachedFile;
     setAttachedFile(null);
     setLoading(true);
+    isSendingRef.current = true;
 
     try {
       if (!sessionId) {
@@ -226,6 +230,7 @@ export default function AgentChat({ className = "" }: AgentChatProps) {
       ]);
     } finally {
       setLoading(false);
+      isSendingRef.current = false;
     }
   };
 
