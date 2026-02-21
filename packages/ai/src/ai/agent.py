@@ -5,6 +5,7 @@ Interlock Tech-Transfer Agent — single tool-calling ReAct agent.
 from __future__ import annotations
 
 from dataclasses import asdict
+from typing import Any
 from uuid import UUID, uuid4
 
 from langchain_core.messages import AIMessage, HumanMessage
@@ -486,17 +487,54 @@ Provide clear, direct answers with part IDs and summaries.
 
 
 def _get_strong_llm():
-    from langchain_openrouter import ChatOpenRouter
+    import os
 
-    return ChatOpenRouter(
-        model="openai/gpt-5.2",
+    from langchain_openai import ChatOpenAI
+    from pydantic import SecretStr
+
+    api_key = os.environ.get("OPENROUTER_API_KEY")
+
+    return ChatOpenAI(
+        model_name="google/gemini-2.0-flash-001",
         temperature=0.3,
+        openai_api_base="https://openrouter.ai/api/v1",
+        openai_api_key=SecretStr(api_key) if api_key else None,
     )
 
 
 # ═══════════════════════════════════════════════════════════════════════
 #  Agent Entry Point
 # ═══════════════════════════════════════════════════════════════════════
+
+
+def _get_agent():
+    """Internal helper to create the agent instance."""
+    from langchain.agents import create_agent
+    from langchain_core.messages import SystemMessage
+
+    llm = _get_strong_llm()
+    return create_agent(
+        model=llm,
+        tools=ALL_TOOLS,
+        system_prompt=SystemMessage(content=SYSTEM_PROMPT),
+    )
+
+
+def _prepare_messages(question: Any, history: list[dict[str, Any]]):
+    """Convert question and history into a list of LangChain messages."""
+
+    messages = []
+    for msg in history:
+        role = msg.get("role", "")
+        content = msg.get("content", "")
+        if role == "user":
+            messages.append(HumanMessage(content=content))
+        elif role == "assistant":
+            messages.append(AIMessage(content=content))
+
+    # Add current question
+    messages.append(HumanMessage(content=question))
+    return messages
 
 
 def get_tech_transfer_agent():
@@ -506,34 +544,12 @@ def get_tech_transfer_agent():
     Accepts ``{"question": "...", "history": [...]}`` and returns a plain string answer.
     The history is a list of dicts with "role" and "content" keys.
     """
-    from langchain.agents import create_agent
-    from langchain_core.messages import SystemMessage
     from langchain_core.runnables import RunnableLambda
 
-    llm = _get_strong_llm()
-
-    # Create an agent using LangChain's new create_agent pattern
-    agent = create_agent(
-        model=llm,
-        tools=ALL_TOOLS,
-        system_prompt=SystemMessage(content=SYSTEM_PROMPT),
-    )
+    agent = _get_agent()
 
     def input_adapter(inputs: dict) -> dict:
-        # Build message list from history + current question
-        from langchain_core.messages import AIMessage, HumanMessage
-
-        messages = []
-        history = inputs.get("history", [])
-        for msg in history:
-            role = msg.get("role", "")
-            content = msg.get("content", "")
-            if role == "user":
-                messages.append(HumanMessage(content=content))
-            elif role == "assistant":
-                messages.append(AIMessage(content=content))
-        # Add current question
-        messages.append(HumanMessage(content=inputs["question"]))
+        messages = _prepare_messages(inputs["question"], inputs.get("history", []))
         return {"messages": messages}
 
     def safe_invoke(inputs: dict, max_retries: int = 3) -> dict:
@@ -726,3 +742,40 @@ def get_tech_transfer_agent():
         return {"response": content, "tool_calls": tool_calls}
 
     return RunnableLambda(input_adapter) | RunnableLambda(safe_invoke) | RunnableLambda(output_adapter) | RunnableLambda(final_adapter)
+
+
+async def stream_tech_transfer_agent(question: Any, history: list[dict[str, Any]]):
+    """
+    Build and stream the tech-transfer agent events.
+    Yields dicts with 'type', 'content'/'tool'/'input'/'output'.
+    """
+    agent = _get_agent()
+    messages = _prepare_messages(question, history)
+
+    async for event in agent.astream_events({"messages": messages}, version="v2"):
+        kind = event["event"]
+
+        if kind == "on_chat_model_stream":
+            content = event["data"]["chunk"].content
+            if content:
+                yield {"type": "content", "content": content}
+
+        elif kind == "on_tool_start":
+            yield {
+                "type": "tool_start",
+                "tool": event["name"],
+                "input": str(event["data"].get("input", {})),
+            }
+
+        elif kind == "on_tool_end":
+            output = event["data"].get("output")
+            # Truncate output if too long
+            output_str = str(output)
+            if len(output_str) > 1000:
+                output_str = output_str[:1000] + "... [truncated]"
+
+            yield {
+                "type": "tool_end",
+                "tool": event["name"],
+                "output": output_str,
+            }

@@ -1,7 +1,6 @@
 /* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
- 
 export { ApiError } from './core/ApiError';
 export { CancelablePromise, CancelError } from './core/CancelablePromise';
 export { OpenAPI } from './core/OpenAPI';
@@ -11,6 +10,8 @@ export type { ApiKeyCreate } from './models/ApiKeyCreate';
 export type { ApiKeyRead } from './models/ApiKeyRead';
 export type { AssembleRequest } from './models/AssembleRequest';
 export type { Body_chat_agent_agent_chat_post } from './models/Body_chat_agent_agent_chat_post';
+export type { Body_chat_session_stream_agent_sessions__session_id__chat_post } from './models/Body_chat_session_stream_agent_sessions__session_id__chat_post';
+export type { Body_create_session_endpoint_agent_sessions_post } from './models/Body_create_session_endpoint_agent_sessions_post';
 export type { Body_ingest_bom_ingest_bom_post } from './models/Body_ingest_bom_ingest_bom_post';
 export type { CreateLaborRequest } from './models/CreateLaborRequest';
 export type { CreateToolRequest } from './models/CreateToolRequest';
