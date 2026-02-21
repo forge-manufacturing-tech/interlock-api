@@ -30,6 +30,7 @@ locals {
     "run.googleapis.com",
     "artifactregistry.googleapis.com",
     "iam.googleapis.com",
+    "storage.googleapis.com",
   ]
 }
 
@@ -125,7 +126,26 @@ resource "google_cloud_run_v2_service" "api" {
 }
 
 # ──────────────────────────────────────────────────────────────────────────────
-# 5. IAM – Allow unauthenticated access (public API)
+# 5. Blob Storage (GCS)
+# ──────────────────────────────────────────────────────────────────────────────
+
+resource "google_storage_bucket" "blobs" {
+  name                        = "${var.project_id}-${var.service_name}-blobs"
+  location                    = var.region
+  uniform_bucket_level_access = true
+  force_destroy               = false
+
+  depends_on = [google_project_service.apis]
+}
+
+resource "google_storage_bucket_iam_member" "blobs_admin" {
+  bucket = google_storage_bucket.blobs.name
+  role   = "roles/storage.objectAdmin"
+  member = "serviceAccount:${google_service_account.cloud_run.email}"
+}
+
+# ──────────────────────────────────────────────────────────────────────────────
+# 6. IAM – Allow unauthenticated access (public API)
 # ──────────────────────────────────────────────────────────────────────────────
 
 resource "google_cloud_run_v2_service_iam_member" "public_access" {

@@ -31,6 +31,7 @@ from models.main import (
     CurrencyAmount,
     CurrencyNode,
     CurrencyQuantity,
+    FileAttachment,
     LaborNode,
     LaborQuantity,
     OperationInputCurrency,
@@ -650,6 +651,61 @@ class GraphRepository:
             except Exception:
                 session.rollback()
                 raise
+
+    # ===============================================================
+    # File Attachments
+    # ===============================================================
+
+    def add_file_attachment(
+        self,
+        name: str,
+        storage_path: str,
+        content_type: str | None = None,
+        size: int | None = None,
+        part_id: UUID | None = None,
+        operation_id: UUID | None = None,
+        owner_id: UUID | None = None,
+    ) -> FileAttachment:
+        with self.db.session as session:
+            attachment = FileAttachment(
+                name=name,
+                storage_path=storage_path,
+                content_type=content_type,
+                size=size,
+                part_id=part_id,
+                operation_id=operation_id,
+                owner_id=owner_id,
+            )
+            session.add(attachment)
+            session.commit()
+            session.refresh(attachment)
+            return attachment
+
+    def list_file_attachments(
+        self,
+        part_id: UUID | None = None,
+        operation_id: UUID | None = None,
+    ) -> list[FileAttachment]:
+        with self.db.session as session:
+            statement = select(FileAttachment)
+            if part_id:
+                statement = statement.where(FileAttachment.part_id == part_id)
+            if operation_id:
+                statement = statement.where(FileAttachment.operation_id == operation_id)
+            return list(session.exec(statement).all())
+
+    def get_file_attachment(self, attachment_id: UUID) -> FileAttachment | None:
+        with self.db.session as session:
+            return session.get(FileAttachment, attachment_id)
+
+    def delete_file_attachment(self, attachment_id: UUID) -> bool:
+        with self.db.session as session:
+            attachment = session.get(FileAttachment, attachment_id)
+            if not attachment:
+                return False
+            session.delete(attachment)
+            session.commit()
+            return True
 
     # ===============================================================
     # Validation

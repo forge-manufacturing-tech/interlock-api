@@ -1,0 +1,16 @@
+[project]
+name = "storage"
+version = "0.1.0"
+description = "Abstract storage provider for Interlock"
+readme = "README.md"
+authors = [
+    { name = "Nathan Alam", email = "nathanalam99@gmail.com" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "google-cloud-storage",
+]
+
+[build-system]
+requires = ["uv_build>=0.9.22,<0.10.0"]
+build-backend = "uv_build"
