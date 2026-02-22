@@ -21,11 +21,14 @@ from orm.main import (
     create_chat_session,
     get_chat_messages,
     get_chat_session,
+    get_node_shares,
     get_part,
     get_tree_json,
     list_chat_sessions,
     list_parts,
     list_root_parts,
+    share_node,
+    unshare_node,
 )
 from parsers.bom import parse_messy_bom
 from scalar_fastapi import get_scalar_api_reference
@@ -472,9 +475,9 @@ async def export_tree_as_bom(
     current_user: dict = Depends(get_current_user),
 ):
     """Export a manufacturing tree as a CSV Bill of Materials."""
-    tree = get_tree_json(part_id)
-    if not tree:
-        raise HTTPException(status_code=404, detail="Tree not found")
+    tree = get_tree_json(part_id, user_id=current_user["id"])
+    if not tree or tree.get("error") == "Access Denied" or tree.get("name") == "Private Part":
+        raise HTTPException(status_code=403, detail="Access denied to this tree")
 
     rows = _flatten_tree_to_bom(tree)
 
@@ -499,9 +502,9 @@ async def export_tree_as_work_instructions(
     current_user: dict = Depends(get_current_user),
 ):
     """Export a manufacturing tree as markdown work instructions."""
-    tree = get_tree_json(part_id)
-    if not tree:
-        raise HTTPException(status_code=404, detail="Tree not found")
+    tree = get_tree_json(part_id, user_id=current_user["id"])
+    if not tree or tree.get("error") == "Access Denied" or tree.get("name") == "Private Part":
+        raise HTTPException(status_code=403, detail="Access denied to this tree")
 
     markdown = _tree_to_work_instructions(tree)
 
@@ -522,7 +525,7 @@ async def read_parts(
     current_user: dict = Depends(get_current_user),
 ) -> list[PartNode]:
     """List parts in the manufacturing graph."""
-    return list_parts(limit=limit, offset=offset)
+    return list_parts(limit=limit, offset=offset, user_id=current_user["id"])
 
 
 @app.get("/parts/{part_id}")
@@ -531,9 +534,9 @@ async def read_part(
     current_user: dict = Depends(get_current_user),
 ) -> PartNode:
     """Get a specific part by ID."""
-    part = get_part(part_id)
+    part = get_part(part_id, user_id=current_user["id"])
     if not part:
-        raise HTTPException(status_code=404, detail="Part not found")
+        raise HTTPException(status_code=404, detail="Part not found or access denied")
     return part
 
 
@@ -542,7 +545,57 @@ async def read_trees(
     current_user: dict = Depends(get_current_user),
 ) -> list[PartNode]:
     """Get all root parts (ends of trees)."""
-    return list_root_parts()
+    return list_root_parts(user_id=current_user["id"])
+
+
+@app.post("/nodes/{node_id}/share/{user_id}")
+async def share_node_endpoint(
+    node_id: UUID,
+    user_id: UUID,
+    current_user: dict = Depends(get_current_user),
+):
+    """Share a node with another user."""
+    from orm.main import get_node_by_id
+    node = get_node_by_id(node_id, user_id=current_user["id"])
+    if not node:
+        raise HTTPException(status_code=404, detail="Node not found or access denied")
+    if str(node.owner_id) != str(current_user["id"]):
+        raise HTTPException(status_code=403, detail="Only the owner can share this node")
+
+    share_node(node_id, user_id)
+    return {"status": "success"}
+
+
+@app.delete("/nodes/{node_id}/share/{user_id}")
+async def unshare_node_endpoint(
+    node_id: UUID,
+    user_id: UUID,
+    current_user: dict = Depends(get_current_user),
+):
+    """Unshare a node with another user."""
+    from orm.main import get_node_by_id
+    node = get_node_by_id(node_id, user_id=current_user["id"])
+    if not node:
+        raise HTTPException(status_code=404, detail="Node not found or access denied")
+    if str(node.owner_id) != str(current_user["id"]):
+        raise HTTPException(status_code=403, detail="Only the owner can manage shares for this node")
+
+    unshare_node(node_id, user_id)
+    return {"status": "success"}
+
+
+@app.get("/nodes/{node_id}/shares")
+async def get_node_shares_endpoint(
+    node_id: UUID,
+    current_user: dict = Depends(get_current_user),
+):
+    """Get all users a node is shared with."""
+    from orm.main import get_node_by_id
+    node = get_node_by_id(node_id, user_id=current_user["id"])
+    if not node:
+        raise HTTPException(status_code=404, detail="Node not found or access denied")
+
+    return get_node_shares(node_id)
 
 
 @app.get("/trees/{part_id}")
@@ -551,7 +604,10 @@ async def read_tree_structure(
     current_user: dict = Depends(get_current_user),
 ) -> dict:
     """Get a recursive tree structure starting from part_id."""
-    return get_tree_json(part_id)
+    tree = get_tree_json(part_id, user_id=current_user["id"])
+    if not tree or tree.get("name") == "Private Part":
+         raise HTTPException(status_code=403, detail="Access denied to this tree")
+    return tree
 
 
 if os.path.isdir(STATIC_DIR):

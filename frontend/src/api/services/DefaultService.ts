@@ -1,6 +1,7 @@
 /* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
+/* eslint-disable */
 import type { Body_chat_agent_agent_chat_post } from '../models/Body_chat_agent_agent_chat_post';
 import type { Body_chat_session_stream_agent_sessions__session_id__chat_post } from '../models/Body_chat_session_stream_agent_sessions__session_id__chat_post';
 import type { Body_create_session_endpoint_agent_sessions_post } from '../models/Body_create_session_endpoint_agent_sessions_post';
@@ -236,6 +237,75 @@ export class DefaultService {
         return __request(OpenAPI, {
             method: 'GET',
             url: '/trees',
+        });
+    }
+    /**
+     * Share Node Endpoint
+     * Share a node with another user.
+     * @param nodeId
+     * @param userId
+     * @returns any Successful Response
+     * @throws ApiError
+     */
+    public static shareNodeEndpointNodesNodeIdShareUserIdPost(
+        nodeId: string,
+        userId: string,
+    ): CancelablePromise<any> {
+        return __request(OpenAPI, {
+            method: 'POST',
+            url: '/nodes/{node_id}/share/{user_id}',
+            path: {
+                'node_id': nodeId,
+                'user_id': userId,
+            },
+            errors: {
+                422: `Validation Error`,
+            },
+        });
+    }
+    /**
+     * Unshare Node Endpoint
+     * Unshare a node with another user.
+     * @param nodeId
+     * @param userId
+     * @returns any Successful Response
+     * @throws ApiError
+     */
+    public static unshareNodeEndpointNodesNodeIdShareUserIdDelete(
+        nodeId: string,
+        userId: string,
+    ): CancelablePromise<any> {
+        return __request(OpenAPI, {
+            method: 'DELETE',
+            url: '/nodes/{node_id}/share/{user_id}',
+            path: {
+                'node_id': nodeId,
+                'user_id': userId,
+            },
+            errors: {
+                422: `Validation Error`,
+            },
+        });
+    }
+    /**
+     * Get Node Shares Endpoint
+     * Get all users a node is shared with.
+     * @param nodeId
+     * @returns any Successful Response
+     * @throws ApiError
+     */
+    public static getNodeSharesEndpointNodesNodeIdSharesGet(
+        nodeId: string,
+    ): CancelablePromise<any> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/nodes/{node_id}/shares',
+            path: {
+                'node_id': nodeId,
+            },
+            errors: {
+                422: `Validation Error`,
+            },
         });
     }
     /**

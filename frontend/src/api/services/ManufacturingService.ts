@@ -1,6 +1,7 @@
 /* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
+/* eslint-disable */
 import type { AssembleRequest } from '../models/AssembleRequest';
 import type { CreateLaborRequest } from '../models/CreateLaborRequest';
 import type { CreateToolRequest } from '../models/CreateToolRequest';

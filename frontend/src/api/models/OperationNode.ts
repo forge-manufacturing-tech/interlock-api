@@ -1,6 +1,7 @@
 /* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
+/* eslint-disable */
 import type { OpType } from './OpType';
 /**
  * A manufacturing procedure.
@@ -22,6 +23,9 @@ export type OperationNode = {
     id?: string;
     name?: (string | null);
     description?: (string | null);
+    owner_id?: (string | null);
+    is_public?: boolean;
+    project_label?: (string | null);
     op_type?: OpType;
     instructions?: (string | null);
     setup_time_minutes?: number;

@@ -44,6 +44,8 @@ class PurchaseRequest(BaseModel):
     currency: str = "USD"
     description: str | None = None
     unit_of_measure: str = "each"
+    project_label: str | None = None
+    is_public: bool = False
 
 
 class AssembleRequest(BaseModel):
@@ -61,6 +63,8 @@ class AssembleRequest(BaseModel):
     tool_ids: list[UUID] | None = None
     tool_quantities: list[float] | None = None
     tool_units: list[str] | None = None
+    project_label: str | None = None
+    is_public: bool = False
 
 
 class CreateLaborRequest(BaseModel):
@@ -82,6 +86,8 @@ class CreateToolRequest(BaseModel):
 class ModifyPartRequest(BaseModel):
     name: str | None = None
     description: str | None = None
+    project_label: str | None = None
+    is_public: bool | None = None
 
 
 class UpdateOperationRequest(BaseModel):
@@ -91,6 +97,8 @@ class UpdateOperationRequest(BaseModel):
     yield_rate: float | None = None
     setup_time_minutes: float | None = None
     estimated_duration_minutes: float | None = None
+    project_label: str | None = None
+    is_public: bool | None = None
 
 
 class UpdateOperationInputsRequest(BaseModel):
@@ -118,6 +126,9 @@ async def purchase_material_endpoint(
         name=req.name,
         description=req.description or f"Purchased {req.name}",
         unit_of_measure=req.unit_of_measure,
+        owner_id=current_user["id"],
+        project_label=req.project_label,
+        is_public=req.is_public,
     )
     op_id = uuid4()
     op = OperationNode(
@@ -125,6 +136,9 @@ async def purchase_material_endpoint(
         name=f"Purchase {req.name}",
         description=f"Purchase transaction for {req.name}",
         op_type=OpType.PURCHASE,
+        owner_id=current_user["id"],
+        project_label=req.project_label,
+        is_public=req.is_public,
     )
     cost_obj = CurrencyAmount(amount=req.cost, currency_code=req.currency)
     try:
@@ -177,6 +191,9 @@ async def assemble_part_endpoint(
         id=part_id,
         name=req.name,
         description=req.description or f"Assembled {req.name}",
+        owner_id=current_user["id"],
+        project_label=req.project_label,
+        is_public=req.is_public,
     )
     op_id = uuid4()
     op = OperationNode(
@@ -188,6 +205,9 @@ async def assemble_part_endpoint(
         yield_rate=req.yield_rate,
         setup_time_minutes=req.setup_time_minutes,
         estimated_duration_minutes=req.estimated_duration_minutes,
+        owner_id=current_user["id"],
+        project_label=req.project_label,
+        is_public=req.is_public,
     )
 
     try:
@@ -203,14 +223,20 @@ async def modify_part_endpoint(
     current_user: dict = Depends(get_current_user),
 ):
     """Modify an existing part's name or description."""
-    part = get_part(part_id)
+    part = get_part(part_id, user_id=current_user["id"])
     if not part:
-        raise HTTPException(status_code=404, detail="Part not found")
+        raise HTTPException(status_code=404, detail="Part not found or access denied")
+    if str(part.owner_id) != str(current_user["id"]):
+        raise HTTPException(status_code=403, detail="Only the owner can modify this part")
 
     if req.name is not None:
         part.name = req.name
     if req.description is not None:
         part.description = req.description
+    if req.project_label is not None:
+        part.project_label = req.project_label
+    if req.is_public is not None:
+        part.is_public = req.is_public
 
     try:
         return update_part(part)
@@ -224,6 +250,12 @@ async def remove_part_endpoint(
     current_user: dict = Depends(get_current_user),
 ):
     """Delete a part from the database."""
+    part = get_part(part_id, user_id=current_user["id"])
+    if not part:
+        raise HTTPException(status_code=404, detail="Part not found or access denied")
+    if str(part.owner_id) != str(current_user["id"]):
+        raise HTTPException(status_code=403, detail="Only the owner can delete this part")
+
     try:
         success = delete_part(part_id)
         if not success:
@@ -239,8 +271,11 @@ async def validate_part_endpoint(
     current_user: dict = Depends(get_current_user),
 ):
     """Validate the manufacturing tree starting from a root part."""
+    part = get_part(part_id, user_id=current_user["id"])
+    if not part:
+        raise HTTPException(status_code=404, detail="Part not found or access denied")
     try:
-        result = validate_tree(part_id)
+        result = validate_tree(part_id, user_id=current_user["id"])
         return result
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
@@ -252,8 +287,11 @@ async def get_part_ancestors_endpoint(
     current_user: dict = Depends(get_current_user),
 ):
     """Get all upstream ancestor parts that feed into this part."""
+    part = get_part(part_id, user_id=current_user["id"])
+    if not part:
+        raise HTTPException(status_code=404, detail="Part not found or access denied")
     try:
-        return get_ancestors(part_id)
+        return get_ancestors(part_id, user_id=current_user["id"])
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
 
@@ -264,8 +302,11 @@ async def get_part_costs_endpoint(
     current_user: dict = Depends(get_current_user),
 ):
     """Get all leaf currency nodes (raw costs) upstream of a part."""
+    part = get_part(part_id, user_id=current_user["id"])
+    if not part:
+        raise HTTPException(status_code=404, detail="Part not found or access denied")
     try:
-        return get_leaf_currencies(part_id)
+        return get_leaf_currencies(part_id, user_id=current_user["id"])
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
 
@@ -276,11 +317,14 @@ async def get_part_timeline_endpoint(
     current_user: dict = Depends(get_current_user),
 ):
     """Get the full manufacturing timeline for a part."""
+    part = get_part(part_id, user_id=current_user["id"])
+    if not part:
+        raise HTTPException(status_code=404, detail="Part not found or access denied")
     try:
         # get_full_timeline returns BaseNode list, which is polymorphic
         # FastAPI might struggle with strict List[BaseNode] if not handled,
         # allowing implicit dict return is safer here given polymorphic nature.
-        return get_full_timeline(part_id)
+        return get_full_timeline(part_id, user_id=current_user["id"])
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
 
@@ -292,8 +336,11 @@ async def get_part_bom_endpoint(
     current_user: dict = Depends(get_current_user),
 ):
     """Get the flattened Bill of Materials for a part and quantity."""
+    part = get_part(part_id, user_id=current_user["id"])
+    if not part:
+        raise HTTPException(status_code=404, detail="Part not found or access denied")
     try:
-        return get_bom(part_id, quantity)
+        return get_bom(part_id, quantity, user_id=current_user["id"])
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
 
@@ -308,9 +355,11 @@ async def patch_operation_endpoint(
     current_user: dict = Depends(get_current_user),
 ):
     """Update operation details."""
-    op = get_operation(op_id)
+    op = get_operation(op_id, user_id=current_user["id"])
     if not op:
-        raise HTTPException(status_code=404, detail="Operation not found")
+        raise HTTPException(status_code=404, detail="Operation not found or access denied")
+    if str(op.owner_id) != str(current_user["id"]):
+        raise HTTPException(status_code=403, detail="Only the owner can modify this operation")
 
     if req.name is not None:
         op.name = req.name
@@ -324,6 +373,10 @@ async def patch_operation_endpoint(
         op.setup_time_minutes = req.setup_time_minutes
     if req.estimated_duration_minutes is not None:
         op.estimated_duration_minutes = req.estimated_duration_minutes
+    if req.project_label is not None:
+        op.project_label = req.project_label
+    if req.is_public is not None:
+        op.is_public = req.is_public
 
     try:
         return update_operation(op)
@@ -338,6 +391,12 @@ async def update_operation_inputs_endpoint(
     current_user: dict = Depends(get_current_user),
 ):
     """Update operation inputs (parts, labor, tools, currencies)."""
+    op = get_operation(op_id, user_id=current_user["id"])
+    if not op:
+        raise HTTPException(status_code=404, detail="Operation not found or access denied")
+    if str(op.owner_id) != str(current_user["id"]):
+        raise HTTPException(status_code=403, detail="Only the owner can modify operation inputs")
+
     try:
         update_operation_inputs(
             op_id=op_id,
@@ -359,7 +418,7 @@ async def list_labor_endpoint(
     current_user: dict = Depends(get_current_user),
 ):
     """List all labor types available in the system."""
-    return list_labor()
+    return list_labor(user_id=current_user["id"])
 
 
 @router.post("/labor", response_model=LaborNode)
@@ -375,6 +434,8 @@ async def create_labor_endpoint(
         hourly_rate=req.hourly_rate,
         description=req.description or f"{req.name} labor",
         skill_level=req.skill_level,
+        owner_id=current_user["id"],
+        is_public=False,
     )
     try:
         return create_labor(labor)
@@ -390,7 +451,7 @@ async def list_tools_endpoint(
     current_user: dict = Depends(get_current_user),
 ):
     """List all tools/machines available in the system."""
-    return list_tools()
+    return list_tools(user_id=current_user["id"])
 
 
 @router.post("/tools", response_model=ToolNode)
@@ -408,6 +469,8 @@ async def create_tool_endpoint(
         rate_unit=req.rate_unit,
         setup_time_minutes=req.setup_time_minutes,
         description=req.description or f"{req.name} machine/tool",
+        owner_id=current_user["id"],
+        is_public=False,
     )
     try:
         return create_tool(tool)

@@ -33,6 +33,7 @@ from models.main import (
     CurrencyQuantity,
     LaborNode,
     LaborQuantity,
+    NodeShare,
     OperationInputCurrency,
     OperationInputLabor,
     OperationInputParts,
@@ -116,6 +117,9 @@ class GraphRepository:
                         name=f"Cost: {part.name}",
                         iso_code=c_input.currency_code,
                         description=f"Purchase cost for {part.name}",
+                        owner_id=part.owner_id,
+                        is_public=part.is_public,
+                        project_label=part.project_label,
                     )
                     session.add(curr_node)
 
@@ -233,16 +237,33 @@ class GraphRepository:
     # CRUD Operations
     # ===============================================================
 
-    def get_part(self, part_id: UUID) -> PartNode | None:
-        with self.db.session as session:
-            return session.get(PartNode, part_id)
+    def has_access(self, user_id: UUID | None, node: BaseNode, session: Session) -> bool:
+        """Check if a user has access to a node. Must be called within an active session."""
+        if node.is_public:
+            return True
+        if user_id is None:
+            return False
+        if node.owner_id == user_id:
+            return True
+        share = session.exec(select(NodeShare).where(NodeShare.node_id == node.id, NodeShare.user_id == user_id)).first()
+        return share is not None
 
-    def list_parts(self, *, limit: int = 100, offset: int = 0) -> list[PartNode]:
+    def get_part(self, part_id: UUID, user_id: UUID | None = None) -> PartNode | None:
+        with self.db.session as session:
+            node = session.get(PartNode, part_id)
+            if node and not self.has_access(user_id, node, session):
+                return None
+            return node
+
+    def list_parts(self, *, limit: int = 100, offset: int = 0, user_id: UUID | None = None) -> list[PartNode]:
         with self.db.session as session:
             statement = select(PartNode).order_by(PartNode.name).limit(limit).offset(offset)
+            if user_id:
+                shares = select(NodeShare.node_id).where(NodeShare.user_id == user_id)
+                statement = statement.where((col(PartNode.owner_id) == user_id) | (col(PartNode.is_public)) | (col(PartNode.id).in_(shares)))
             return list(session.exec(statement).all())
 
-    def list_root_parts(self) -> list[PartNode]:
+    def list_root_parts(self, user_id: UUID | None = None) -> list[PartNode]:
         """Find parts that are not used as inputs to any operation."""
         with self.db.session as session:
             # Parts in operation_input_parts
@@ -251,6 +272,9 @@ class GraphRepository:
             used_as_tools = select(ToolNode.linked_part_id).join(OperationInputTools, col(ToolNode.id) == col(OperationInputTools.tool_id)).where(col(ToolNode.linked_part_id).is_not(None))
 
             statement = select(PartNode).where(col(PartNode.id).not_in(used_in_ops)).where(col(PartNode.id).not_in(used_as_tools)).order_by(PartNode.name)
+            if user_id:
+                shares = select(NodeShare.node_id).where(NodeShare.user_id == user_id)
+                statement = statement.where((col(PartNode.owner_id) == user_id) | (col(PartNode.is_public)) | (col(PartNode.id).in_(shares)))
             return list(session.exec(statement).all())
 
     def update_part(self, part: PartNode) -> PartNode:
@@ -261,6 +285,9 @@ class GraphRepository:
             existing.name = part.name
             existing.description = part.description
             existing.unit_of_measure = part.unit_of_measure
+            existing.owner_id = part.owner_id
+            existing.is_public = part.is_public
+            existing.project_label = part.project_label
             session.add(existing)
             session.commit()
             session.refresh(existing)
@@ -289,13 +316,20 @@ class GraphRepository:
             session.refresh(curr)
             return curr
 
-    def get_currency(self, curr_id: UUID) -> CurrencyNode | None:
+    def get_currency(self, curr_id: UUID, user_id: UUID | None = None) -> CurrencyNode | None:
         with self.db.session as session:
-            return session.get(CurrencyNode, curr_id)
+            node = session.get(CurrencyNode, curr_id)
+            if node and not self.has_access(user_id, node, session):
+                return None
+            return node
 
-    def list_currencies(self) -> list[CurrencyNode]:
+    def list_currencies(self, user_id: UUID | None = None) -> list[CurrencyNode]:
         with self.db.session as session:
-            return list(session.exec(select(CurrencyNode).order_by(CurrencyNode.name)).all())
+            statement = select(CurrencyNode).order_by(CurrencyNode.name)
+            if user_id:
+                shares = select(NodeShare.node_id).where(NodeShare.user_id == user_id)
+                statement = statement.where((col(CurrencyNode.owner_id) == user_id) | (col(CurrencyNode.is_public)) | (col(CurrencyNode.id).in_(shares)))
+            return list(session.exec(statement).all())
 
     def delete_currency(self, curr_id: UUID) -> bool:
         with self.db.session as session:
@@ -317,13 +351,20 @@ class GraphRepository:
             session.refresh(labor)
             return labor
 
-    def get_labor(self, labor_id: UUID) -> LaborNode | None:
+    def get_labor(self, labor_id: UUID, user_id: UUID | None = None) -> LaborNode | None:
         with self.db.session as session:
-            return session.get(LaborNode, labor_id)
+            node = session.get(LaborNode, labor_id)
+            if node and not self.has_access(user_id, node, session):
+                return None
+            return node
 
-    def list_labor(self) -> list[LaborNode]:
+    def list_labor(self, user_id: UUID | None = None) -> list[LaborNode]:
         with self.db.session as session:
-            return list(session.exec(select(LaborNode).order_by(LaborNode.name)).all())
+            statement = select(LaborNode).order_by(LaborNode.name)
+            if user_id:
+                shares = select(NodeShare.node_id).where(NodeShare.user_id == user_id)
+                statement = statement.where((col(LaborNode.owner_id) == user_id) | (col(LaborNode.is_public)) | (col(LaborNode.id).in_(shares)))
+            return list(session.exec(statement).all())
 
     # --- Tools ---
 
@@ -342,25 +383,38 @@ class GraphRepository:
             session.refresh(tool)
             return tool
 
-    def get_tool(self, tool_id: UUID) -> ToolNode | None:
+    def get_tool(self, tool_id: UUID, user_id: UUID | None = None) -> ToolNode | None:
         with self.db.session as session:
-            return session.get(ToolNode, tool_id)
+            node = session.get(ToolNode, tool_id)
+            if node and not self.has_access(user_id, node, session):
+                return None
+            return node
 
-    def list_tools(self) -> list[ToolNode]:
+    def list_tools(self, user_id: UUID | None = None) -> list[ToolNode]:
         with self.db.session as session:
-            return list(session.exec(select(ToolNode).order_by(ToolNode.name)).all())
+            statement = select(ToolNode).order_by(ToolNode.name)
+            if user_id:
+                shares = select(NodeShare.node_id).where(NodeShare.user_id == user_id)
+                statement = statement.where((col(ToolNode.owner_id) == user_id) | (col(ToolNode.is_public)) | (col(ToolNode.id).in_(shares)))
+            return list(session.exec(statement).all())
 
     # --- Operations ---
 
-    def get_operation(self, op_id: UUID) -> OperationNode | None:
+    def get_operation(self, op_id: UUID, user_id: UUID | None = None) -> OperationNode | None:
         with self.db.session as session:
-            return session.get(OperationNode, op_id)
+            node = session.get(OperationNode, op_id)
+            if node and not self.has_access(user_id, node, session):
+                return None
+            return node
 
-    def list_operations(self, *, op_type: OpType | None = None, limit: int = 100, offset: int = 0) -> list[OperationNode]:
+    def list_operations(self, *, op_type: OpType | None = None, limit: int = 100, offset: int = 0, user_id: UUID | None = None) -> list[OperationNode]:
         with self.db.session as session:
             statement = select(OperationNode).order_by(OperationNode.name).limit(limit).offset(offset)
             if op_type:
                 statement = statement.where(OperationNode.op_type == op_type)
+            if user_id:
+                shares = select(NodeShare.node_id).where(NodeShare.user_id == user_id)
+                statement = statement.where((col(OperationNode.owner_id) == user_id) | (col(OperationNode.is_public)) | (col(OperationNode.id).in_(shares)))
             return list(session.exec(statement).all())
 
     def update_operation(self, op: OperationNode) -> OperationNode:
@@ -387,12 +441,14 @@ class GraphRepository:
             session.commit()
             return True
 
-    def get_node(self, node_id: UUID) -> BaseNode | None:
+    def get_node(self, node_id: UUID, user_id: UUID | None = None) -> BaseNode | None:
         """Look up any node by ID."""
         with self.db.session as session:
             for model in [PartNode, OperationNode, CurrencyNode, LaborNode, ToolNode]:
                 node = session.get(model, node_id)
                 if node:
+                    if not self.has_access(user_id, node, session):
+                        return None
                     return node
             return None
 
@@ -449,11 +505,11 @@ class GraphRepository:
     # Traversal (Material Flow)
     # ===============================================================
 
-    def get_full_timeline(self, part_id: UUID) -> list[BaseNode]:
+    def get_full_timeline(self, part_id: UUID, user_id: UUID | None = None) -> list[BaseNode]:
         """BFS walk from *part_id* upward (inputs) through the tree."""
         with self.db.session as session:
             start = session.get(PartNode, part_id)
-            if start is None:
+            if start is None or not self.has_access(user_id, start, session):
                 return []
 
             visited: set[UUID] = set()
@@ -463,6 +519,8 @@ class GraphRepository:
             while queue:
                 node = queue.pop(0)
                 if node.id in visited:
+                    continue
+                if not self.has_access(user_id, node, session):
                     continue
                 visited.add(node.id)
                 timeline.append(node)
@@ -486,20 +544,33 @@ class GraphRepository:
 
             return timeline
 
-    def get_ancestors(self, part_id: UUID) -> list[PartNode]:
+    def get_ancestors(self, part_id: UUID, user_id: UUID | None = None) -> list[PartNode]:
         """All upstream parts feeding into *part_id*."""
-        return [n for n in self.get_full_timeline(part_id) if isinstance(n, PartNode) and n.id != part_id]
+        return [n for n in self.get_full_timeline(part_id, user_id=user_id) if isinstance(n, PartNode) and n.id != part_id]
 
-    def get_leaf_currencies(self, part_id: UUID) -> list[CurrencyNode]:
+    def get_leaf_currencies(self, part_id: UUID, user_id: UUID | None = None) -> list[CurrencyNode]:
         """Currency leaves reachable from *part_id*."""
-        return [n for n in self.get_full_timeline(part_id) if isinstance(n, CurrencyNode)]
+        return [n for n in self.get_full_timeline(part_id, user_id=user_id) if isinstance(n, CurrencyNode)]
 
-    def get_tree_json(self, part_id: UUID) -> dict:
+    def get_tree_json(self, part_id: UUID, user_id: UUID | None = None) -> dict:
         """Recursive tree structure for visualization."""
         with self.db.session as session:
-            part = session.get(PartNode, part_id)
-            if not part:
-                return {}
+            return self._get_tree_json_internal(part_id, user_id, session)
+
+    def _get_tree_json_internal(self, part_id: UUID, user_id: UUID | None, session: Session) -> dict:
+        """Internal recursive implementation that shares a session."""
+        part = session.get(PartNode, part_id)
+        if not part:
+            return {}
+
+        if not self.has_access(user_id, part, session):
+                return {
+                    "id": str(part.id),
+                    "name": "Private Part",
+                    "type": "part",
+                    "description": "You do not have permission to view this part.",
+                    "children": [],
+                }
 
             res = {
                 "id": str(part.id),
@@ -530,7 +601,7 @@ class GraphRepository:
                     # 1. Input Parts (Recursive cost)
                     part_inputs = select(PartNode, OperationInputParts.quantity, OperationInputParts.unit).join(OperationInputParts, col(PartNode.id) == col(OperationInputParts.part_id)).where(OperationInputParts.operation_id == op.id)
                     for p_node, qty, unit in session.exec(part_inputs):
-                        child_tree = self.get_tree_json(p_node.id)
+                        child_tree = self._get_tree_json_internal(p_node.id, user_id, session)
                         child_cost = child_tree.get("unit_cost", 0.0)
                         total_unit_cost += qty * child_cost
 
@@ -558,26 +629,27 @@ class GraphRepository:
                         total_unit_cost += cost
                         tool_entry = {"id": str(t_node.id), "name": t_node.name, "type": "tool", "quantity": qty, "unit": unit, "cost_rate": t_node.cost_rate, "rate_unit": t_node.rate_unit, "cost": cost}
                         if t_node.linked_part_id:
-                            tool_entry["linked_part"] = self.get_tree_json(t_node.linked_part_id)
+                            tool_entry["linked_part"] = self._get_tree_json_internal(t_node.linked_part_id, user_id, session)
                         op_node["children"].append(tool_entry)
 
             res["unit_cost"] = total_unit_cost
             return res
 
-    def get_bom(self, part_id: UUID, quantity: float = 1.0) -> list[dict]:
+    def get_bom(self, part_id: UUID, quantity: float = 1.0, user_id: UUID | None = None) -> list[dict]:
         """
         Calculate a flattened Bill of Materials for *quantity* units of *part_id*.
         Only includes parts created by PURCHASE operations (raw materials).
         """
         bom_map: dict[UUID, dict] = {}  # part_id -> {part_id, name, quantity, unit, unit_cost}
 
-        def traverse(p_id: UUID, target_qty: float):
-            with self.db.session as session:
+        with self.db.session as session:
+
+            def traverse(p_id: UUID, target_qty: float):
                 part = session.get(PartNode, p_id)
-                if not part:
+                if not part or not self.has_access(user_id, part, session):
                     return
 
-                op = self.get_created_by(p_id)
+                op = session.get(OperationNode, part.created_by_id) if part.created_by_id else None
                 if not op:
                     return
 
@@ -652,16 +724,39 @@ class GraphRepository:
                 raise
 
     # ===============================================================
+    # Node Sharing
+    # ===============================================================
+
+    def share_node(self, node_id: UUID, user_id: UUID) -> None:
+        with self.db.session as session:
+            existing = session.exec(select(NodeShare).where(NodeShare.node_id == node_id, NodeShare.user_id == user_id)).first()
+            if not existing:
+                session.add(NodeShare(node_id=node_id, user_id=user_id))
+                session.commit()
+
+    def unshare_node(self, node_id: UUID, user_id: UUID) -> None:
+        with self.db.session as session:
+            existing = session.exec(select(NodeShare).where(NodeShare.node_id == node_id, NodeShare.user_id == user_id)).first()
+            if existing:
+                session.delete(existing)
+                session.commit()
+
+    def get_node_shares(self, node_id: UUID) -> list[UUID]:
+        with self.db.session as session:
+            shares = session.exec(select(NodeShare.user_id).where(NodeShare.node_id == node_id)).all()
+            return list(shares)
+
+    # ===============================================================
     # Validation
     # ===============================================================
 
-    def validate_tree(self, root_id: UUID) -> ValidationResult:
+    def validate_tree(self, root_id: UUID, user_id: UUID | None = None) -> ValidationResult:
         """Validate tree from root part."""
         errs: list[ValidationError] = []
         with self.db.session as session:
             root = session.get(PartNode, root_id)
-            if root is None:
-                return ValidationResult(False, [ValidationError(root_id, "Root not found")])
+            if root is None or not self.has_access(user_id, root, session):
+                return ValidationResult(False, [ValidationError(root_id, "Root not found or access denied")])
 
             visited: set[UUID] = set()
             queue: list[tuple[BaseNode, set[UUID]]] = [(root, set())]
@@ -726,7 +821,10 @@ class GraphRepository:
                                 errs.append(ValidationError(node.id, f"Standard Op '{node.name}': non-positive quantity"))
                             p_node = session.get(PartNode, pq.part_id)
                             if p_node:
-                                queue.append((p_node, current_path))
+                                if not self.has_access(user_id, p_node, session):
+                                    errs.append(ValidationError(node.id, f"Standard Op '{node.name}': access denied to input part '{p_node.name}'"))
+                                else:
+                                    queue.append((p_node, current_path))
                         for lq in labors:
                             if lq.quantity <= 0:
                                 errs.append(ValidationError(node.id, f"Standard Op '{node.name}': non-positive labor qty"))

@@ -1,6 +1,7 @@
 /* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
+/* eslint-disable */
 import type { ApiKeyCreate } from '../models/ApiKeyCreate';
 import type { ApiKeyRead } from '../models/ApiKeyRead';
 import type { SystemSettings } from '../models/SystemSettings';
@@ -122,6 +123,17 @@ export class AuthenticationService {
         return __request(OpenAPI, {
             method: 'GET',
             url: '/auth/admin/users',
+        });
+    }
+    /**
+     * List All Users
+     * @returns UserRead Successful Response
+     * @throws ApiError
+     */
+    public static listAllUsersAuthUsersGet(): CancelablePromise<Array<UserRead>> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/auth/users',
         });
     }
     /**

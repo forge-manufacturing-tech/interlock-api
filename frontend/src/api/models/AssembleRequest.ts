@@ -1,6 +1,7 @@
 /* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
+/* eslint-disable */
 export type AssembleRequest = {
     name: string;
     input_part_ids: Array<string>;
@@ -16,5 +17,7 @@ export type AssembleRequest = {
     tool_ids?: (Array<string> | null);
     tool_quantities?: (Array<number> | null);
     tool_units?: (Array<string> | null);
+    project_label?: (string | null);
+    is_public?: boolean;
 };
 

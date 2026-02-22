@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { ManufacturingService } from "../../api";
+import { ManufacturingService, DefaultService, AuthenticationService } from "../../api";
 import type { PartNode } from "../../api";
 import {
   X,
@@ -14,6 +14,9 @@ import {
   Cuboid,
   Hammer,
   Package,
+  Users,
+  Shield,
+  ShieldOff,
 } from "lucide-react";
 import BOMWizardModal from "./BOMWizardModal";
 
@@ -45,6 +48,8 @@ export default function PartDetailPanel({
   const [editName, setEditName] = useState(node.name || "");
   const [editDesc, setEditDesc] = useState(node.description || "");
   const [editUnit, setEditUnit] = useState(node.unit_of_measure || "each");
+  const [editLabel, setEditLabel] = useState(node.project_label || "");
+  const [editPublic, setEditPublic] = useState(node.is_public ?? false);
 
   // Operation editing state
   const operation = (node.children || []).find((c) => c.type === "operation");
@@ -97,8 +102,29 @@ export default function PartDetailPanel({
     enabled: !!node.id,
   });
 
+  const { data: allUsers } = useQuery({
+    queryKey: ["users"],
+    queryFn: () => AuthenticationService.listAllUsersAuthUsersGet(),
+  });
+
+  const { data: nodeShares } = useQuery({
+    queryKey: ["part", node.id, "shares"],
+    queryFn: () => DefaultService.getNodeSharesEndpointNodesNodeIdSharesGet(node.id!),
+    enabled: !!node.id,
+  });
+
+  const shareMutation = useMutation({
+    mutationFn: (userId: string) => DefaultService.shareNodeEndpointNodesNodeIdShareUserIdPost(node.id!, userId),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["part", node.id, "shares"] }),
+  });
+
+  const unshareMutation = useMutation({
+    mutationFn: (userId: string) => DefaultService.unshareNodeEndpointNodesNodeIdShareUserIdDelete(node.id!, userId),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["part", node.id, "shares"] }),
+  });
+
   const modifyMutation = useMutation({
-    mutationFn: (data: { name: string; description?: string }) =>
+    mutationFn: (data: { name?: string; description?: string; project_label?: string; is_public?: boolean }) =>
       ManufacturingService.modifyPartEndpointPartsPartIdPatch(node.id!, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["trees"] });
@@ -182,6 +208,8 @@ export default function PartDetailPanel({
     modifyMutation.mutate({
       name: editName,
       description: editDesc,
+      project_label: editLabel,
+      is_public: editPublic,
     });
 
     // Save operation and inputs if it exists
@@ -242,23 +270,48 @@ export default function PartDetailPanel({
                   {node.name || "Unnamed Part"}
                 </h1>
               )}
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <span className="inline-flex items-center rounded-md bg-blue-400/10 px-2 py-1 text-[10px] font-mono font-medium text-blue-400 ring-1 ring-inset ring-blue-400/20">
                   {node.id}
                 </span>
                 {isEditing ? (
-                  <input
-                    className="text-[10px] bg-surface border border-border rounded px-1 text-text-muted uppercase font-bold tracking-wider w-20"
-                    value={editUnit}
-                    onChange={(e) => setEditUnit(e.target.value)}
-                    placeholder="Unit (e.g. EACH)"
-                  />
+                  <div className="flex items-center gap-2">
+                    <input
+                      className="text-[10px] bg-surface border border-border rounded px-1 py-1 text-text-primary font-mono w-20"
+                      value={editUnit}
+                      onChange={(e) => setEditUnit(e.target.value)}
+                      placeholder="Unit"
+                    />
+                    <input
+                      className="text-[10px] bg-surface border border-border rounded px-1 py-1 text-text-primary font-mono w-32"
+                      value={editLabel}
+                      onChange={(e) => setEditLabel(e.target.value)}
+                      placeholder="Project Label"
+                    />
+                    <button
+                      onClick={() => setEditPublic(!editPublic)}
+                      className={`flex items-center gap-1 px-1.5 py-1 rounded text-[10px] font-bold uppercase transition-colors ${editPublic ? 'bg-emerald-500/10 text-emerald-500' : 'bg-amber-500/10 text-amber-500'}`}
+                    >
+                      {editPublic ? <Shield size={10} /> : <ShieldOff size={10} />}
+                      {editPublic ? 'Public' : 'Private'}
+                    </button>
+                  </div>
                 ) : (
-                  node.unit_of_measure && (
-                    <span className="text-[10px] text-text-muted uppercase font-bold tracking-wider">
-                      {node.unit_of_measure}
+                  <>
+                    {node.unit_of_measure && (
+                      <span className="text-[10px] text-text-muted uppercase font-bold tracking-wider">
+                        {node.unit_of_measure}
+                      </span>
+                    )}
+                    {node.project_label && (
+                      <span className="text-[10px] text-primary bg-primary/10 px-1.5 py-0.5 rounded font-bold uppercase tracking-wider">
+                        {node.project_label}
+                      </span>
+                    )}
+                    <span className={`text-[10px] font-bold uppercase px-1.5 py-0.5 rounded ${node.is_public ? 'text-emerald-500 bg-emerald-500/10' : 'text-amber-500 bg-amber-500/10'}`}>
+                      {node.is_public ? 'Public' : 'Private'}
                     </span>
-                  )
+                  </>
                 )}
               </div>
             </div>
@@ -570,6 +623,42 @@ export default function PartDetailPanel({
                   </div>
                 </div>
               )}
+            </div>
+          </div>
+        )}
+
+        {/* Sharing Section */}
+        {!isEditing && (
+          <div className="space-y-4 pt-4 border-t border-border">
+            <h4 className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-text-muted">
+              <Users size={14} />
+              Sharing
+            </h4>
+            <div className="space-y-3">
+              <div className="flex flex-wrap gap-2">
+                {allUsers?.map((user) => {
+                  const isShared = nodeShares?.includes(user.id);
+                  const isOwner = node.owner_id === user.id;
+                  if (isOwner) return null;
+
+                  return (
+                    <button
+                      key={user.id}
+                      onClick={() => isShared ? unshareMutation.mutate(user.id) : shareMutation.mutate(user.id)}
+                      className={`flex items-center gap-1.5 px-2 py-1 rounded-full text-[10px] font-medium transition-all border ${isShared
+                        ? "bg-primary/10 border-primary text-primary"
+                        : "bg-surface-light border-border text-text-muted hover:border-text-muted"
+                        }`}
+                    >
+                      {user.name || user.email}
+                      {isShared && <X size={10} />}
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="text-[10px] text-text-muted italic">
+                Click a user to toggle sharing for this part.
+              </p>
             </div>
           </div>
         )}

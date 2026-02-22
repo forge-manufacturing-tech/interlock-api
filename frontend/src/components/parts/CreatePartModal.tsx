@@ -32,10 +32,14 @@ export default function CreatePartModal({ onClose }: CreatePartModalProps) {
   const [pCost, setPCost] = useState<number>(0);
   const [pDesc, setPDesc] = useState("");
   const [pUnit, setPUnit] = useState("each");
+  const [pLabel, setPLabel] = useState("");
+  const [pPublic, setPPublic] = useState(false);
 
   // Assemble State
   const [aName, setAName] = useState("");
   const [aDesc, setADesc] = useState("");
+  const [aLabel, setALabel] = useState("");
+  const [aPublic, setAPublic] = useState(false);
   const [inputs, setInputs] = useState<{ id: string; qty: number }[]>([]);
   const [labors, setLabors] = useState<{ id: string; qty: number }[]>([]);
   const [tools, setTools] = useState<{ id: string; qty: number }[]>([]);
@@ -82,6 +86,8 @@ export default function CreatePartModal({ onClose }: CreatePartModalProps) {
       description: pDesc,
       unit_of_measure: pUnit,
       currency: "USD",
+      project_label: pLabel || undefined,
+      is_public: pPublic,
     });
   };
 
@@ -96,6 +102,8 @@ export default function CreatePartModal({ onClose }: CreatePartModalProps) {
       labor_quantities: labors.filter((l) => l.id).map((l) => l.qty),
       tool_ids: tools.filter((t) => t.id).map((t) => t.id),
       tool_quantities: tools.filter((t) => t.id).map((t) => t.qty),
+      project_label: aLabel || undefined,
+      is_public: aPublic,
     });
   };
 
@@ -232,6 +240,33 @@ export default function CreatePartModal({ onClose }: CreatePartModalProps) {
                   </select>
                 </div>
               </div>
+              <div className="grid grid-cols-2 gap-6">
+                <div>
+                  <label className="block text-xs font-bold text-text-muted uppercase tracking-wider mb-2">
+                    Project Label
+                  </label>
+                  <input
+                    value={pLabel}
+                    onChange={(e) => setPLabel(e.target.value)}
+                    className="w-full rounded-lg border border-border bg-surface px-4 py-3 text-text-primary focus:border-primary outline-none transition-all"
+                    placeholder="e.g. Project X"
+                  />
+                </div>
+                <div className="flex items-end pb-3">
+                  <label className="flex items-center gap-2 cursor-pointer group">
+                    <input
+                      type="checkbox"
+                      checked={pPublic}
+                      onChange={(e) => setPPublic(e.target.checked)}
+                      className="w-4 h-4 rounded border-border bg-surface text-primary focus:ring-primary"
+                    />
+                    <span className="text-sm font-bold text-text-secondary group-hover:text-text-primary transition-colors">
+                      Make Public
+                    </span>
+                  </label>
+                </div>
+              </div>
+
               <div>
                 <label className="block text-xs font-bold text-text-muted uppercase tracking-wider mb-2">
                   Description
@@ -269,6 +304,30 @@ export default function CreatePartModal({ onClose }: CreatePartModalProps) {
                     className="w-full rounded-lg border border-border bg-surface px-4 py-3 text-text-primary focus:border-primary outline-none transition-all"
                     placeholder="e.g. Main Frame Sub-Assembly"
                   />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-text-muted uppercase tracking-wider mb-2">
+                    Project Label
+                  </label>
+                  <input
+                    value={aLabel}
+                    onChange={(e) => setALabel(e.target.value)}
+                    className="w-full rounded-lg border border-border bg-surface px-4 py-3 text-text-primary focus:border-primary outline-none transition-all"
+                    placeholder="e.g. Project X"
+                  />
+                </div>
+                <div className="flex items-end pb-3">
+                  <label className="flex items-center gap-2 cursor-pointer group">
+                    <input
+                      type="checkbox"
+                      checked={aPublic}
+                      onChange={(e) => setAPublic(e.target.checked)}
+                      className="w-4 h-4 rounded border-border bg-surface text-primary focus:ring-primary"
+                    />
+                    <span className="text-sm font-bold text-text-secondary group-hover:text-text-primary transition-colors">
+                      Make Public
+                    </span>
+                  </label>
                 </div>
                 <div className="md:col-span-2">
                   <label className="block text-xs font-bold text-text-muted uppercase tracking-wider mb-2">
