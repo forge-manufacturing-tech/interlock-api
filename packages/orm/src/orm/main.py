@@ -17,6 +17,7 @@ from models.main import (
     CurrencyAmount,
     CurrencyNode,
     CurrencyQuantity,
+    FileAttachment,
     LaborNode,
     LaborQuantity,
     OperationNode,
@@ -86,6 +87,11 @@ __all__ = [
     "get_bom",
     # Operation Updates
     "update_operation_inputs",
+    # File Attachments
+    "add_file_attachment",
+    "list_file_attachments",
+    "get_file_attachment",
+    "delete_file_attachment",
     # Validation
     "validate_tree",
     # Chat
@@ -410,6 +416,51 @@ def update_operation_inputs(
         input_tools=input_tools,
         input_currencies=input_currencies,
     )
+
+
+# ── File Attachments ──────────────────────────────────────────────
+
+
+def add_file_attachment(
+    name: str,
+    storage_path: str,
+    node_id: UUID,
+    content_type: str | None = None,
+    size: int | None = None,
+    owner_id: UUID | None = None,
+    db: DatabaseManager | None = None,
+) -> FileAttachment:
+    return _repo(db).add_file_attachment(
+        name=name,
+        storage_path=storage_path,
+        node_id=node_id,
+        content_type=content_type,
+        size=size,
+        owner_id=owner_id,
+    )
+
+
+def list_file_attachments(
+    node_id: UUID,
+    db: DatabaseManager | None = None,
+) -> list[FileAttachment]:
+    return _repo(db).list_file_attachments(
+        node_id=node_id,
+    )
+
+
+def get_file_attachment(
+    attachment_id: UUID,
+    db: DatabaseManager | None = None,
+) -> FileAttachment | None:
+    return _repo(db).get_file_attachment(attachment_id)
+
+
+def delete_file_attachment(
+    attachment_id: UUID,
+    db: DatabaseManager | None = None,
+) -> bool:
+    return _repo(db).delete_file_attachment(attachment_id)
 
 
 # ── Validation ────────────────────────────────────────────────────
