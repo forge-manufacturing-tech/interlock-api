@@ -556,6 +556,7 @@ async def share_node_endpoint(
 ):
     """Share a node with another user."""
     from orm.main import get_node_by_id
+
     node = get_node_by_id(node_id, user_id=current_user["id"])
     if not node:
         raise HTTPException(status_code=404, detail="Node not found or access denied")
@@ -574,6 +575,7 @@ async def unshare_node_endpoint(
 ):
     """Unshare a node with another user."""
     from orm.main import get_node_by_id
+
     node = get_node_by_id(node_id, user_id=current_user["id"])
     if not node:
         raise HTTPException(status_code=404, detail="Node not found or access denied")
@@ -591,6 +593,7 @@ async def get_node_shares_endpoint(
 ):
     """Get all users a node is shared with."""
     from orm.main import get_node_by_id
+
     node = get_node_by_id(node_id, user_id=current_user["id"])
     if not node:
         raise HTTPException(status_code=404, detail="Node not found or access denied")
@@ -606,7 +609,7 @@ async def read_tree_structure(
     """Get a recursive tree structure starting from part_id."""
     tree = get_tree_json(part_id, user_id=current_user["id"])
     if not tree or tree.get("name") == "Private Part":
-         raise HTTPException(status_code=403, detail="Access denied to this tree")
+        raise HTTPException(status_code=403, detail="Access denied to this tree")
     return tree
 
 

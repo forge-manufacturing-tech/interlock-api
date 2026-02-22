@@ -46,7 +46,7 @@ from models.main import (
     ToolNode,
     ToolQuantity,
 )
-from sqlmodel import col, delete, select
+from sqlmodel import Session, col, delete, select
 
 # ── Validation data classes ────────────────────────────────────────
 
@@ -564,76 +564,76 @@ class GraphRepository:
             return {}
 
         if not self.has_access(user_id, part, session):
-                return {
-                    "id": str(part.id),
-                    "name": "Private Part",
-                    "type": "part",
-                    "description": "You do not have permission to view this part.",
-                    "children": [],
-                }
-
-            res = {
+            return {
                 "id": str(part.id),
-                "name": part.name,
+                "name": "Private Part",
                 "type": "part",
-                "description": part.description,
-                "unit_of_measure": part.unit_of_measure,
+                "description": "You do not have permission to view this part.",
                 "children": [],
             }
 
-            total_unit_cost = 0.0
-            if part.created_by_id:
-                op = session.get(OperationNode, part.created_by_id)
-                if op:
-                    op_node = {
-                        "id": str(op.id),
-                        "name": op.name,
-                        "type": "operation",
-                        "op_type": op.op_type.value,
-                        "yield_rate": op.yield_rate,
-                        "setup_time_minutes": op.setup_time_minutes,
-                        "estimated_duration_minutes": op.estimated_duration_minutes,
-                        "instructions": op.instructions,
-                        "children": [],
-                    }
-                    res["children"].append(op_node)
+        res = {
+            "id": str(part.id),
+            "name": part.name,
+            "type": "part",
+            "description": part.description,
+            "unit_of_measure": part.unit_of_measure,
+            "children": [],
+        }
 
-                    # 1. Input Parts (Recursive cost)
-                    part_inputs = select(PartNode, OperationInputParts.quantity, OperationInputParts.unit).join(OperationInputParts, col(PartNode.id) == col(OperationInputParts.part_id)).where(OperationInputParts.operation_id == op.id)
-                    for p_node, qty, unit in session.exec(part_inputs):
-                        child_tree = self._get_tree_json_internal(p_node.id, user_id, session)
-                        child_cost = child_tree.get("unit_cost", 0.0)
-                        total_unit_cost += qty * child_cost
+        total_unit_cost = 0.0
+        if part.created_by_id:
+            op = session.get(OperationNode, part.created_by_id)
+            if op:
+                op_node = {
+                    "id": str(op.id),
+                    "name": op.name,
+                    "type": "operation",
+                    "op_type": op.op_type.value,
+                    "yield_rate": op.yield_rate,
+                    "setup_time_minutes": op.setup_time_minutes,
+                    "estimated_duration_minutes": op.estimated_duration_minutes,
+                    "instructions": op.instructions,
+                    "children": [],
+                }
+                res["children"].append(op_node)
 
-                        child_tree["quantity"] = qty
-                        child_tree["unit"] = unit
-                        op_node["children"].append(child_tree)
+                # 1. Input Parts (Recursive cost)
+                part_inputs = select(PartNode, OperationInputParts.quantity, OperationInputParts.unit).join(OperationInputParts, col(PartNode.id) == col(OperationInputParts.part_id)).where(OperationInputParts.operation_id == op.id)
+                for p_node, qty, unit in session.exec(part_inputs):
+                    child_tree = self._get_tree_json_internal(p_node.id, user_id, session)
+                    child_cost = child_tree.get("unit_cost", 0.0)
+                    total_unit_cost += qty * child_cost
 
-                    # 2. Input Currencies
-                    curr_inputs = select(CurrencyNode, OperationInputCurrency.quantity, OperationInputCurrency.unit).join(OperationInputCurrency, col(CurrencyNode.id) == col(OperationInputCurrency.currency_id)).where(OperationInputCurrency.operation_id == op.id)
-                    for c_node, qty, unit in session.exec(curr_inputs):
-                        total_unit_cost += qty
-                        op_node["children"].append({"id": str(c_node.id), "name": c_node.name, "type": "currency", "iso_code": c_node.iso_code, "quantity": qty, "unit": unit})
+                    child_tree["quantity"] = qty
+                    child_tree["unit"] = unit
+                    op_node["children"].append(child_tree)
 
-                    # 3. Input Labor
-                    labor_inputs = select(LaborNode, OperationInputLabor.quantity, OperationInputLabor.unit).join(OperationInputLabor, col(LaborNode.id) == col(OperationInputLabor.labor_id)).where(OperationInputLabor.operation_id == op.id)
-                    for l_node, qty, unit in session.exec(labor_inputs):
-                        cost = qty * l_node.hourly_rate
-                        total_unit_cost += cost
-                        op_node["children"].append({"id": str(l_node.id), "name": l_node.name, "type": "labor", "quantity": qty, "unit": unit, "hourly_rate": l_node.hourly_rate, "cost": cost})
+                # 2. Input Currencies
+                curr_inputs = select(CurrencyNode, OperationInputCurrency.quantity, OperationInputCurrency.unit).join(OperationInputCurrency, col(CurrencyNode.id) == col(OperationInputCurrency.currency_id)).where(OperationInputCurrency.operation_id == op.id)
+                for c_node, qty, unit in session.exec(curr_inputs):
+                    total_unit_cost += qty
+                    op_node["children"].append({"id": str(c_node.id), "name": c_node.name, "type": "currency", "iso_code": c_node.iso_code, "quantity": qty, "unit": unit})
 
-                    # 4. Input Tools
-                    tool_inputs = select(ToolNode, OperationInputTools.quantity, OperationInputTools.unit).join(OperationInputTools, col(ToolNode.id) == col(OperationInputTools.tool_id)).where(OperationInputTools.operation_id == op.id)
-                    for t_node, qty, unit in session.exec(tool_inputs):
-                        cost = qty * t_node.cost_rate
-                        total_unit_cost += cost
-                        tool_entry = {"id": str(t_node.id), "name": t_node.name, "type": "tool", "quantity": qty, "unit": unit, "cost_rate": t_node.cost_rate, "rate_unit": t_node.rate_unit, "cost": cost}
-                        if t_node.linked_part_id:
-                            tool_entry["linked_part"] = self._get_tree_json_internal(t_node.linked_part_id, user_id, session)
-                        op_node["children"].append(tool_entry)
+                # 3. Input Labor
+                labor_inputs = select(LaborNode, OperationInputLabor.quantity, OperationInputLabor.unit).join(OperationInputLabor, col(LaborNode.id) == col(OperationInputLabor.labor_id)).where(OperationInputLabor.operation_id == op.id)
+                for l_node, qty, unit in session.exec(labor_inputs):
+                    cost = qty * l_node.hourly_rate
+                    total_unit_cost += cost
+                    op_node["children"].append({"id": str(l_node.id), "name": l_node.name, "type": "labor", "quantity": qty, "unit": unit, "hourly_rate": l_node.hourly_rate, "cost": cost})
 
-            res["unit_cost"] = total_unit_cost
-            return res
+                # 4. Input Tools
+                tool_inputs = select(ToolNode, OperationInputTools.quantity, OperationInputTools.unit).join(OperationInputTools, col(ToolNode.id) == col(OperationInputTools.tool_id)).where(OperationInputTools.operation_id == op.id)
+                for t_node, qty, unit in session.exec(tool_inputs):
+                    cost = qty * t_node.cost_rate
+                    total_unit_cost += cost
+                    tool_entry = {"id": str(t_node.id), "name": t_node.name, "type": "tool", "quantity": qty, "unit": unit, "cost_rate": t_node.cost_rate, "rate_unit": t_node.rate_unit, "cost": cost}
+                    if t_node.linked_part_id:
+                        tool_entry["linked_part"] = self._get_tree_json_internal(t_node.linked_part_id, user_id, session)
+                    op_node["children"].append(tool_entry)
+
+        res["unit_cost"] = total_unit_cost
+        return res
 
     def get_bom(self, part_id: UUID, quantity: float = 1.0, user_id: UUID | None = None) -> list[dict]:
         """
