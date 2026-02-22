@@ -88,6 +88,10 @@ __all__ = [
     "update_operation_inputs",
     # Validation
     "validate_tree",
+    # Node Sharing
+    "share_node",
+    "unshare_node",
+    "get_node_shares",
     # Chat
     "ChatRepository",
     "create_chat_session",
@@ -144,27 +148,31 @@ def manufacture_part(
 
 def get_part(
     part_id: UUID,
+    user_id: UUID | None = None,
     db: DatabaseManager | None = None,
 ) -> PartNode | None:
-    return _repo(db).get_part(part_id)
+    return _repo(db).get_part(part_id, user_id=user_id)
 
 
 def list_parts(
     *,
     limit: int = 100,
     offset: int = 0,
+    user_id: UUID | None = None,
     db: DatabaseManager | None = None,
 ) -> list[PartNode]:
     return _repo(db).list_parts(
         limit=limit,
         offset=offset,
+        user_id=user_id,
     )
 
 
 def list_root_parts(
+    user_id: UUID | None = None,
     db: DatabaseManager | None = None,
 ) -> list[PartNode]:
-    return _repo(db).list_root_parts()
+    return _repo(db).list_root_parts(user_id=user_id)
 
 
 def update_part(
@@ -193,15 +201,17 @@ def create_currency(
 
 def get_currency(
     curr_id: UUID,
+    user_id: UUID | None = None,
     db: DatabaseManager | None = None,
 ) -> CurrencyNode | None:
-    return _repo(db).get_currency(curr_id)
+    return _repo(db).get_currency(curr_id, user_id=user_id)
 
 
 def list_currencies(
+    user_id: UUID | None = None,
     db: DatabaseManager | None = None,
 ) -> list[CurrencyNode]:
-    return _repo(db).list_currencies()
+    return _repo(db).list_currencies(user_id=user_id)
 
 
 def delete_currency(
@@ -223,15 +233,17 @@ def create_labor(
 
 def get_labor(
     labor_id: UUID,
+    user_id: UUID | None = None,
     db: DatabaseManager | None = None,
 ) -> LaborNode | None:
-    return _repo(db).get_labor(labor_id)
+    return _repo(db).get_labor(labor_id, user_id=user_id)
 
 
 def list_labor(
+    user_id: UUID | None = None,
     db: DatabaseManager | None = None,
 ) -> list[LaborNode]:
-    return _repo(db).list_labor()
+    return _repo(db).list_labor(user_id=user_id)
 
 
 # ── Tool CRUD ──────────────────────────────────────────────────────
@@ -246,15 +258,17 @@ def create_tool(
 
 def get_tool(
     tool_id: UUID,
+    user_id: UUID | None = None,
     db: DatabaseManager | None = None,
 ) -> ToolNode | None:
-    return _repo(db).get_tool(tool_id)
+    return _repo(db).get_tool(tool_id, user_id=user_id)
 
 
 def list_tools(
+    user_id: UUID | None = None,
     db: DatabaseManager | None = None,
 ) -> list[ToolNode]:
-    return _repo(db).list_tools()
+    return _repo(db).list_tools(user_id=user_id)
 
 
 # ── Operation CRUD ─────────────────────────────────────────────────
@@ -262,9 +276,10 @@ def list_tools(
 
 def get_operation(
     op_id: UUID,
+    user_id: UUID | None = None,
     db: DatabaseManager | None = None,
 ) -> OperationNode | None:
-    return _repo(db).get_operation(op_id)
+    return _repo(db).get_operation(op_id, user_id=user_id)
 
 
 def list_operations(
@@ -272,9 +287,10 @@ def list_operations(
     op_type: OpType | None = None,
     limit: int = 100,
     offset: int = 0,
+    user_id: UUID | None = None,
     db: DatabaseManager | None = None,
 ) -> list[OperationNode]:
-    return _repo(db).list_operations(op_type=op_type, limit=limit, offset=offset)
+    return _repo(db).list_operations(op_type=op_type, limit=limit, offset=offset, user_id=user_id)
 
 
 def update_operation(
@@ -296,9 +312,10 @@ def delete_operation(
 
 def get_node_by_id(
     node_id: UUID,
+    user_id: UUID | None = None,
     db: DatabaseManager | None = None,
 ) -> BaseNode | None:
-    return _repo(db).get_node(node_id)
+    return _repo(db).get_node(node_id, user_id=user_id)
 
 
 # ── Relationships: created_by ──────────────────────────────────────
@@ -358,38 +375,43 @@ def get_input_currencies(
 
 def get_full_timeline(
     part_id: UUID,
+    user_id: UUID | None = None,
     db: DatabaseManager | None = None,
 ) -> list[BaseNode]:
-    return _repo(db).get_full_timeline(part_id)
+    return _repo(db).get_full_timeline(part_id, user_id=user_id)
 
 
 def get_ancestors(
     part_id: UUID,
+    user_id: UUID | None = None,
     db: DatabaseManager | None = None,
 ) -> list[PartNode]:
-    return _repo(db).get_ancestors(part_id)
+    return _repo(db).get_ancestors(part_id, user_id=user_id)
 
 
 def get_leaf_currencies(
     part_id: UUID,
+    user_id: UUID | None = None,
     db: DatabaseManager | None = None,
 ) -> list[CurrencyNode]:
-    return _repo(db).get_leaf_currencies(part_id)
+    return _repo(db).get_leaf_currencies(part_id, user_id=user_id)
 
 
 def get_tree_json(
     part_id: UUID,
+    user_id: UUID | None = None,
     db: DatabaseManager | None = None,
 ) -> dict:
-    return _repo(db).get_tree_json(part_id)
+    return _repo(db).get_tree_json(part_id, user_id=user_id)
 
 
 def get_bom(
     part_id: UUID,
     quantity: float = 1.0,
+    user_id: UUID | None = None,
     db: DatabaseManager | None = None,
 ) -> list[dict]:
-    return _repo(db).get_bom(part_id, quantity)
+    return _repo(db).get_bom(part_id, quantity, user_id=user_id)
 
 
 # ── Operation Updates ──────────────────────────────────────────────
@@ -417,9 +439,36 @@ def update_operation_inputs(
 
 def validate_tree(
     root_id: UUID,
+    user_id: UUID | None = None,
     db: DatabaseManager | None = None,
 ) -> ValidationResult:
-    return _repo(db).validate_tree(root_id)
+    return _repo(db).validate_tree(root_id, user_id=user_id)
+
+
+# ── Node Sharing ──────────────────────────────────────────────────
+
+
+def share_node(
+    node_id: UUID,
+    user_id: UUID,
+    db: DatabaseManager | None = None,
+) -> None:
+    return _repo(db).share_node(node_id, user_id)
+
+
+def unshare_node(
+    node_id: UUID,
+    user_id: UUID,
+    db: DatabaseManager | None = None,
+) -> None:
+    return _repo(db).unshare_node(node_id, user_id)
+
+
+def get_node_shares(
+    node_id: UUID,
+    db: DatabaseManager | None = None,
+) -> list[UUID]:
+    return _repo(db).get_node_shares(node_id)
 
 
 # ── Chat ──────────────────────────────────────────────────────────

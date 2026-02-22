@@ -1,6 +1,7 @@
 /* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
+/* eslint-disable */
 /**
  * Represents a type of labor (e.g. 'Welding', 'Assembly').
  *
@@ -12,6 +13,9 @@ export type LaborNode = {
     id?: string;
     name?: (string | null);
     description?: (string | null);
+    owner_id?: (string | null);
+    is_public?: boolean;
+    project_label?: (string | null);
     hourly_rate?: number;
     skill_level?: (string | null);
 };

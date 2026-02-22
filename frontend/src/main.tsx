@@ -8,9 +8,8 @@ import { OpenAPI } from "./api";
 import "./index.css";
 
 // Configure API client base URL
-// If VITE_API_URL is set (e.g. for production), use it.
-// Otherwise default to /api which works with the local Vite proxy and Docker Nginx proxy.
-OpenAPI.BASE = import.meta.env.VITE_API_URL || "http://localhost:8000";
+// Use VITE_API_URL if defined, otherwise default to /api for proxy compatibility.
+OpenAPI.BASE = import.meta.env.VITE_API_URL || "/api";
 
 declare global {
   interface Window {

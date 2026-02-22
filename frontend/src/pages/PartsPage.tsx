@@ -48,9 +48,17 @@ export default function PartsPage() {
     const q = search.toLowerCase();
     return (
       r.name?.toLowerCase().includes(q) ||
-      r.description?.toLowerCase().includes(q)
+      r.description?.toLowerCase().includes(q) ||
+      r.project_label?.toLowerCase().includes(q)
     );
   });
+
+  const groupedRoots = filteredRoots?.reduce((acc, root) => {
+    const label = root.project_label || "Uncategorized";
+    if (!acc[label]) acc[label] = [];
+    acc[label].push(root);
+    return acc;
+  }, {} as Record<string, NonNullable<typeof filteredRoots>>);
 
   const activeTreeData = useQuery({
     queryKey: ["tree", activeTreeId],
@@ -206,23 +214,42 @@ export default function PartsPage() {
                   </div>
                 </div>
               ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pb-10">
-                  {filteredRoots?.map((root) => (
-                    <TreeCard
-                      key={root.id}
-                      root={root as NodeData}
-                      expanded={expandedTrees.has(root.id ?? "")}
-                      onToggle={() => root.id && toggleTree(root.id)}
-                      onSelect={(node) => setSelectedNode(node as NodeData)}
-                      onVisualize={(id) => {
-                        setActiveTreeId(id);
-                        setViewMode("flow");
-                        // Pre-select the root node for the detail panel
-                        setSelectedNode(root as NodeData);
-                      }}
-                      selectedId={selectedNode?.id}
-                      searchQuery={search}
-                    />
+                <div className="space-y-12 pb-20">
+                  {groupedRoots && Object.entries(groupedRoots).sort(([a], [b]) => {
+                    if (a === "Uncategorized") return 1;
+                    if (b === "Uncategorized") return -1;
+                    return a.localeCompare(b);
+                  }).map(([label, items]) => (
+                    <div key={label} className="space-y-4">
+                      <div className="flex items-center gap-4">
+                        <h2 className="text-sm font-bold uppercase tracking-[0.2em] text-text-muted">
+                          {label}
+                        </h2>
+                        <div className="h-px flex-1 bg-border/50" />
+                        <span className="text-[10px] font-mono text-text-muted/50 uppercase">
+                          {items.length} items
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {items.map((root) => (
+                          <TreeCard
+                            key={root.id}
+                            root={root as NodeData}
+                            expanded={expandedTrees.has(root.id ?? "")}
+                            onToggle={() => root.id && toggleTree(root.id)}
+                            onSelect={(node) => setSelectedNode(node as NodeData)}
+                            onVisualize={(id) => {
+                              setActiveTreeId(id);
+                              setViewMode("flow");
+                              // Pre-select the root node for the detail panel
+                              setSelectedNode(root as NodeData);
+                            }}
+                            selectedId={selectedNode?.id}
+                            searchQuery={search}
+                          />
+                        ))}
+                      </div>
+                    </div>
                   ))}
                 </div>
               )}
@@ -313,6 +340,11 @@ function TreeCard({
               <span className="text-xs text-text-muted">
                 {partCount} part{partCount !== 1 ? "s" : ""}
               </span>
+            )}
+            {root.is_public ? (
+              <span className="text-[10px] uppercase font-bold text-emerald-500 bg-emerald-500/10 px-1.5 py-0.5 rounded flex-shrink-0">Public</span>
+            ) : (
+              <span className="text-[10px] uppercase font-bold text-amber-500 bg-amber-500/10 px-1.5 py-0.5 rounded flex-shrink-0">Private</span>
             )}
           </div>
           {root.description && (

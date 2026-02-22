@@ -103,6 +103,13 @@ async def list_users(current_user: dict = Depends(require_admin)):
     return [UserRead(**u) for u in users]
 
 
+@router.get("/users", response_model=list[UserRead])
+async def list_all_users(current_user: dict = Depends(get_current_user)):
+    repo = _get_repo()
+    users = repo.list_users()
+    return [UserRead(**u) for u in users]
+
+
 @router.patch("/admin/users/{user_id}", response_model=UserRead)
 async def update_user(
     user_id: UUID,

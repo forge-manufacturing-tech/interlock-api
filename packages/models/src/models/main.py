@@ -32,6 +32,17 @@ class BaseNode(SQLModel):
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     name: str | None = None
     description: str | None = None
+    owner_id: UUID | None = Field(default=None, index=True)
+    is_public: bool = Field(default=False, index=True)
+    project_label: str | None = Field(default=None, index=True)
+
+
+class NodeShare(SQLModel, table=True):
+    """Link table for sharing specific nodes with specific users."""
+
+    __tablename__ = "node_shares"
+    node_id: UUID = Field(primary_key=True)
+    user_id: UUID = Field(primary_key=True)
 
 
 # --- Link Tables ---
@@ -204,6 +215,7 @@ class QuantityInput(QuantityBase):
 __all__ = [
     "OpType",
     "BaseNode",
+    "NodeShare",
     "PartNode",
     "CurrencyNode",
     "LaborNode",
