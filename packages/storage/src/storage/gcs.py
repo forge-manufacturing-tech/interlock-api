@@ -23,12 +23,29 @@ class GCSStorageProvider(StorageProvider):
         return blob.download_as_bytes()
 
     def get_signed_url(self, file_path: str, expiration: int = 3600) -> str:
+        import os
+
         blob = self.bucket.blob(file_path)
-        return blob.generate_signed_url(
-            version="v4",
-            expiration=datetime.timedelta(seconds=expiration),
-            method="GET",
-        )
+
+        kwargs = {
+            "version": "v4",
+            "expiration": datetime.timedelta(seconds=expiration),
+            "method": "GET",
+        }
+
+        sa_email = os.environ.get("SERVICE_ACCOUNT_EMAIL")
+        if sa_email:
+            import google.auth
+            from google.auth.transport.requests import Request
+
+            # Fetch local ADC tokens
+            credentials, _ = google.auth.default()
+            credentials.refresh(Request())
+
+            kwargs["service_account_email"] = sa_email
+            kwargs["access_token"] = credentials.token
+
+        return blob.generate_signed_url(**kwargs)
 
     def delete_file(self, file_path: str) -> None:
         blob = self.bucket.blob(file_path)

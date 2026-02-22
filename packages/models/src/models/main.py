@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Any
@@ -7,7 +5,7 @@ from uuid import UUID, uuid4
 
 from pydantic import ConfigDict
 from sqlalchemy import JSON, Column, ForeignKey
-from sqlmodel import Field, Relationship, SQLModel
+from sqlmodel import Field, SQLModel
 
 from .chat import ChatMessage, ChatSession
 from .inputs import CurrencyAmount
@@ -91,9 +89,6 @@ class PartNode(BaseNode, table=True):
     created_by_id: UUID | None = Field(default=None)
     created_by_type: str | None = Field(default=None)
 
-    # Relationships
-    attachments: list[FileAttachment] = Relationship(back_populates="part", cascade_delete=True)
-
 
 class CurrencyNode(BaseNode, table=True):
     """
@@ -169,9 +164,6 @@ class OperationNode(BaseNode, table=True):
     # Pydantic configuration to allow arbitrary types if needed, though dict[str, Any] is standard
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
-    # Relationships
-    attachments: list[FileAttachment] = Relationship(back_populates="operation", cascade_delete=True)
-
 
 # --- Quantities (Edges/Inputs) ---
 # These are used for API request/response models and not DB tables themselves (mostly).
@@ -227,12 +219,7 @@ class FileAttachment(SQLModel, table=True):
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     owner_id: UUID | None = Field(default=None)
 
-    part_id: UUID | None = Field(default=None, sa_column=Column(ForeignKey("part_nodes.id", ondelete="CASCADE")))
-    operation_id: UUID | None = Field(default=None, sa_column=Column(ForeignKey("operation_nodes.id", ondelete="CASCADE")))
-
-    # Back-references
-    part: PartNode | None = Relationship(back_populates="attachments")
-    operation: OperationNode | None = Relationship(back_populates="attachments")
+    node_id: UUID = Field(index=True)
 
 
 __all__ = [

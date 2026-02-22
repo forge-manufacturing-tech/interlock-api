@@ -424,32 +424,28 @@ def update_operation_inputs(
 def add_file_attachment(
     name: str,
     storage_path: str,
+    node_id: UUID,
     content_type: str | None = None,
     size: int | None = None,
-    part_id: UUID | None = None,
-    operation_id: UUID | None = None,
     owner_id: UUID | None = None,
     db: DatabaseManager | None = None,
 ) -> FileAttachment:
     return _repo(db).add_file_attachment(
         name=name,
         storage_path=storage_path,
+        node_id=node_id,
         content_type=content_type,
         size=size,
-        part_id=part_id,
-        operation_id=operation_id,
         owner_id=owner_id,
     )
 
 
 def list_file_attachments(
-    part_id: UUID | None = None,
-    operation_id: UUID | None = None,
+    node_id: UUID,
     db: DatabaseManager | None = None,
 ) -> list[FileAttachment]:
     return _repo(db).list_file_attachments(
-        part_id=part_id,
-        operation_id=operation_id,
+        node_id=node_id,
     )
 
 

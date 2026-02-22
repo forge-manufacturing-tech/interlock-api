@@ -660,10 +660,9 @@ class GraphRepository:
         self,
         name: str,
         storage_path: str,
+        node_id: UUID,
         content_type: str | None = None,
         size: int | None = None,
-        part_id: UUID | None = None,
-        operation_id: UUID | None = None,
         owner_id: UUID | None = None,
     ) -> FileAttachment:
         with self.db.session as session:
@@ -672,8 +671,7 @@ class GraphRepository:
                 storage_path=storage_path,
                 content_type=content_type,
                 size=size,
-                part_id=part_id,
-                operation_id=operation_id,
+                node_id=node_id,
                 owner_id=owner_id,
             )
             session.add(attachment)
@@ -683,15 +681,10 @@ class GraphRepository:
 
     def list_file_attachments(
         self,
-        part_id: UUID | None = None,
-        operation_id: UUID | None = None,
+        node_id: UUID,
     ) -> list[FileAttachment]:
         with self.db.session as session:
-            statement = select(FileAttachment)
-            if part_id:
-                statement = statement.where(FileAttachment.part_id == part_id)
-            if operation_id:
-                statement = statement.where(FileAttachment.operation_id == operation_id)
+            statement = select(FileAttachment).where(FileAttachment.node_id == node_id)
             return list(session.exec(statement).all())
 
     def get_file_attachment(self, attachment_id: UUID) -> FileAttachment | None:

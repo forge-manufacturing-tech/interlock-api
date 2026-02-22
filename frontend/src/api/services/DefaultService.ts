@@ -1,6 +1,7 @@
 /* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
+/* eslint-disable */
 import type { Body_chat_agent_agent_chat_post } from '../models/Body_chat_agent_agent_chat_post';
 import type { Body_chat_session_stream_agent_sessions__session_id__chat_post } from '../models/Body_chat_session_stream_agent_sessions__session_id__chat_post';
 import type { Body_create_session_endpoint_agent_sessions_post } from '../models/Body_create_session_endpoint_agent_sessions_post';

@@ -11,8 +11,7 @@ from orm.main import (
     add_file_attachment,
     delete_file_attachment,
     get_file_attachment,
-    get_operation,
-    get_part,
+    get_node_by_id,
     list_file_attachments,
 )
 from storage import get_storage_provider
@@ -20,21 +19,21 @@ from storage import get_storage_provider
 router = APIRouter(tags=["Storage"])
 
 
-@router.post("/parts/{part_id}/files", response_model=FileAttachment)
-async def upload_part_file(
-    part_id: UUID,
+@router.post("/nodes/{node_id}/files", response_model=FileAttachment)
+async def upload_node_file(
+    node_id: UUID,
     file: UploadFile = File(...),
     current_user: dict = Depends(require_ai_access),
 ):
-    """Upload a file associated with a part."""
-    part = get_part(part_id)
-    if not part:
-        raise HTTPException(status_code=404, detail="Part not found")
+    """Upload a file associated with a node."""
+    node = get_node_by_id(node_id)
+    if not node:
+        raise HTTPException(status_code=404, detail="Node not found")
 
     storage = get_storage_provider()
     file_id = uuid4()
     extension = os.path.splitext(file.filename)[1] if file.filename else ""
-    storage_path = f"parts/{part_id}/{file_id}{extension}"
+    storage_path = f"nodes/{node_id}/{file_id}{extension}"
 
     content = await file.read()
     size = len(content)
@@ -49,61 +48,18 @@ async def upload_part_file(
         storage_path=storage_path,
         content_type=file.content_type,
         size=size,
-        part_id=part_id,
+        node_id=node_id,
         owner_id=current_user["id"],
     )
 
 
-@router.get("/parts/{part_id}/files", response_model=list[FileAttachment])
-async def list_part_files(
-    part_id: UUID,
+@router.get("/nodes/{node_id}/files", response_model=list[FileAttachment])
+async def list_node_files(
+    node_id: UUID,
     current_user: dict = Depends(get_current_user),
 ):
-    """List all files associated with a part."""
-    return list_file_attachments(part_id=part_id)
-
-
-@router.post("/operations/{op_id}/files", response_model=FileAttachment)
-async def upload_operation_file(
-    op_id: UUID,
-    file: UploadFile = File(...),
-    current_user: dict = Depends(require_ai_access),
-):
-    """Upload a file associated with an operation."""
-    op = get_operation(op_id)
-    if not op:
-        raise HTTPException(status_code=404, detail="Operation not found")
-
-    storage = get_storage_provider()
-    file_id = uuid4()
-    extension = os.path.splitext(file.filename)[1] if file.filename else ""
-    storage_path = f"operations/{op_id}/{file_id}{extension}"
-
-    content = await file.read()
-    size = len(content)
-
-    try:
-        storage.upload_file(storage_path, BytesIO(content), content_type=file.content_type)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to upload to storage: {str(e)}") from e
-
-    return add_file_attachment(
-        name=file.filename or "unnamed",
-        storage_path=storage_path,
-        content_type=file.content_type,
-        size=size,
-        operation_id=op_id,
-        owner_id=current_user["id"],
-    )
-
-
-@router.get("/operations/{op_id}/files", response_model=list[FileAttachment])
-async def list_operation_files(
-    op_id: UUID,
-    current_user: dict = Depends(get_current_user),
-):
-    """List all files associated with an operation."""
-    return list_file_attachments(operation_id=op_id)
+    """List all files associated with a node."""
+    return list_file_attachments(node_id=node_id)
 
 
 @router.get("/files/{file_id}/download")

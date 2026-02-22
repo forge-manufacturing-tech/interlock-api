@@ -127,7 +127,7 @@ cp -r "${SCRIPT_DIR}/apps/api/src/api" "${BUILD_DIR}/api"
 
 # Copy internal packages (flattened for the container)
 echo "  Copying internal packages..."
-for pkg in core parsers ai database models orm auth; do
+for pkg in core parsers ai database models orm auth storage; do
     src_layout="${SCRIPT_DIR}/packages/${pkg}/src/${pkg}"
     flat_layout="${SCRIPT_DIR}/packages/${pkg}/${pkg}"
     if [[ -d "$src_layout" ]]; then

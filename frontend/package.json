@@ -7,8 +7,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
-    "pre:generate-client": "curl -o openapi.json $VITE_API_URL/openapi.json",
-    "generate-client": "bunx openapi-typescript-codegen --input openapi.json --output src/api --client fetch",
+    "generate-client": "curl -o openapi.json http://localhost:8000/openapi.json && bunx openapi-typescript-codegen --input openapi.json --output src/api --client fetch",
     "preview": "vite preview"
   },
   "dependencies": {
