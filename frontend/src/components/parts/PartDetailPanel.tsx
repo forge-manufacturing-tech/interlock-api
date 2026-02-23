@@ -61,17 +61,39 @@ export default function PartDetailPanel({
   );
 
   // Input quantities state
-  const initialInputs = useMemo(() => operation?.children || node.children || [], [operation, node]);
-  const [inputQtys, setInputQtys] = useState<Record<string, number>>({});
-  const [inputUnits, setInputUnits] = useState<Record<string, string>>({});
-  const [activeInputs, setActiveInputs] = useState<NodeData[]>([]);
+  const initialInputs = useMemo(
+    () => operation?.children || node.children || [],
+    [operation, node],
+  );
+  const [prevInitialInputs, setPrevInitialInputs] = useState(initialInputs);
+  const [inputQtys, setInputQtys] = useState<Record<string, number>>(() =>
+    Object.fromEntries(
+      initialInputs.map((c) => [c.id!, Number(c.quantity || 0)]),
+    ),
+  );
+  const [inputUnits, setInputUnits] = useState<Record<string, string>>(() =>
+    Object.fromEntries(
+      initialInputs.map((c) => [c.id!, (c.unit as string) || ""]),
+    ),
+  );
+  const [activeInputs, setActiveInputs] = useState<NodeData[]>(
+    initialInputs as NodeData[],
+  );
 
-  // Initialize state when initialInputs changes or when entering edit mode
-  useMemo(() => {
+  if (initialInputs !== prevInitialInputs) {
+    setPrevInitialInputs(initialInputs);
+    setInputQtys(
+      Object.fromEntries(
+        initialInputs.map((c) => [c.id!, Number(c.quantity || 0)]),
+      ),
+    );
+    setInputUnits(
+      Object.fromEntries(
+        initialInputs.map((c) => [c.id!, (c.unit as string) || ""]),
+      ),
+    );
     setActiveInputs(initialInputs as NodeData[]);
-    setInputQtys(Object.fromEntries(initialInputs.map((c) => [c.id!, Number(c.quantity || 0)])));
-    setInputUnits(Object.fromEntries(initialInputs.map((c) => [c.id!, (c.unit as string) || ""])));
-  }, [initialInputs]);
+  }
 
   const { data: allParts } = useQuery({
     queryKey: ["trees"],
@@ -196,21 +218,31 @@ export default function PartDetailPanel({
     }
   };
 
-  const inputs = isEditing ? activeInputs : (operation?.children || node.children || []);
+  const inputs = isEditing
+    ? activeInputs
+    : operation?.children || node.children || [];
 
   const handleAddInput = (part: PartNode) => {
-    if (activeInputs.some(i => i.id === part.id)) return;
-    setActiveInputs([...activeInputs, { ...part, type: 'part', quantity: 1 } as NodeData]);
+    if (activeInputs.some((i) => i.id === part.id)) return;
+    setActiveInputs([
+      ...activeInputs,
+      { ...part, type: "part", quantity: 1 } as NodeData,
+    ]);
     setInputQtys({ ...inputQtys, [part.id!]: 1 });
-    setInputUnits({ ...inputUnits, [part.id!]: part.unit_of_measure || 'each' });
+    setInputUnits({
+      ...inputUnits,
+      [part.id!]: part.unit_of_measure || "each",
+    });
   };
 
   const handleRemoveInput = (id: string) => {
-    setActiveInputs(activeInputs.filter(i => i.id !== id));
+    setActiveInputs(activeInputs.filter((i) => i.id !== id));
   };
 
   // Group inputs by type for better display
-  const childParts = (inputs as NodeData[]).filter((c) => c.type === "part" || !c.type);
+  const childParts = (inputs as NodeData[]).filter(
+    (c) => c.type === "part" || !c.type,
+  );
   const childLabor = inputs.filter((c) => c.type === "labor");
   const childTools = inputs.filter((c) => c.type === "tool");
   const childCurrencies = inputs.filter((c) => c.type === "currency");
@@ -384,15 +416,17 @@ export default function PartDetailPanel({
                     <Plus size={14} />
                   </button>
                   <div className="absolute right-0 top-full mt-1 hidden group-hover:block z-30 bg-surface-light border border-border rounded shadow-xl max-h-48 overflow-y-auto w-48">
-                    {allParts?.filter(p => p.id !== node.id).map(p => (
-                      <button
-                        key={p.id}
-                        onClick={() => handleAddInput(p)}
-                        className="w-full text-left px-3 py-2 text-[10px] hover:bg-primary/10 transition-colors border-b border-border last:border-0"
-                      >
-                        {p.name}
-                      </button>
-                    ))}
+                    {allParts
+                      ?.filter((p) => p.id !== node.id)
+                      .map((p) => (
+                        <button
+                          key={p.id}
+                          onClick={() => handleAddInput(p)}
+                          className="w-full text-left px-3 py-2 text-[10px] hover:bg-primary/10 transition-colors border-b border-border last:border-0"
+                        >
+                          {p.name}
+                        </button>
+                      ))}
                   </div>
                 </div>
               )}

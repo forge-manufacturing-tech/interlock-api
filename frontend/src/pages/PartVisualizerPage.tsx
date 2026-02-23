@@ -2,19 +2,21 @@ import { useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { DefaultService } from "../api";
-import { ArrowLeft, Box, Plus } from "lucide-react";
+import { ArrowLeft, Box } from "lucide-react";
 import PartFlowVisualizer from "../components/parts/PartFlowVisualizer";
 import PartDetailPanel from "../components/parts/PartDetailPanel";
-import CreatePartModal from "../components/parts/CreatePartModal";
 import type { NodeData } from "../types/parts";
 
 export default function PartVisualizerPage() {
   const { partId } = useParams<{ partId: string }>();
   const navigate = useNavigate();
   const [selectedNode, setSelectedNode] = useState<NodeData | null>(null);
-  const [showCreatePart, setShowCreatePart] = useState(false);
 
-  const { data: treeData, isLoading, error } = useQuery({
+  const {
+    data: treeData,
+    isLoading,
+    error,
+  } = useQuery({
     queryKey: ["tree", partId],
     queryFn: () => DefaultService.readTreeStructureTreesPartIdGet(partId!),
     enabled: !!partId,
@@ -60,9 +62,7 @@ export default function PartVisualizerPage() {
             <h1 className="font-mono text-lg font-bold uppercase tracking-wider text-text-primary">
               {treeData.name || "Part Tree"}
             </h1>
-            <p className="text-xs text-text-secondary">
-              ID: {treeData.id}
-            </p>
+            <p className="text-xs text-text-secondary">ID: {treeData.id}</p>
           </div>
         </div>
 
@@ -70,8 +70,7 @@ export default function PartVisualizerPage() {
           treeData={treeData as NodeData}
           onSelectNode={(node) => setSelectedNode(node)}
           onAddChild={(node) => {
-              setSelectedNode(node);
-              setShowCreatePart(true);
+            setSelectedNode(node);
           }}
           selectedId={selectedNode?.id}
         />
@@ -84,9 +83,9 @@ export default function PartVisualizerPage() {
             key={selectedNode.id}
             node={selectedNode}
             onSelect={(node) => {
-                // If the node is already selected, maybe we want to navigate to it as root?
-                // For now, let's just update the detail panel.
-                setSelectedNode(node);
+              // If the node is already selected, maybe we want to navigate to it as root?
+              // For now, let's just update the detail panel.
+              setSelectedNode(node);
             }}
             onClose={() => setSelectedNode(null)}
           />
