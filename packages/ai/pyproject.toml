@@ -17,6 +17,7 @@ dependencies = [
     "orm",
     "models",
     "langchain-ollama>=1.0.1",
+    "pydantic-monty>=0.0.7",
 ]
 
 [build-system]
