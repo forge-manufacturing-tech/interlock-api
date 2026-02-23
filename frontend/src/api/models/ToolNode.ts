@@ -1,7 +1,7 @@
 /* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
- 
+/* eslint-disable */
 /**
  * Represents a tool or machine instance.
  * Must reference a PartNode that defines the physical equipment.

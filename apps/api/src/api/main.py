@@ -8,7 +8,7 @@ from typing import Any
 from uuid import UUID
 
 import fitz
-from ai.agent import get_tech_transfer_agent
+from ai.agent import get_tech_transfer_agent, stream_tech_transfer_agent
 from auth.dependencies import get_current_user, require_ai_access
 from auth.routes import router as auth_router
 from fastapi import Depends, FastAPI, File, Form, HTTPException, UploadFile
@@ -16,11 +16,22 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from models.main import PartNode
 from openai import OpenAI
-from orm.main import get_part, get_tree_json, list_parts, list_root_parts
+from orm.main import (
+    add_chat_message,
+    create_chat_session,
+    get_chat_messages,
+    get_chat_session,
+    get_part,
+    get_tree_json,
+    list_chat_sessions,
+    list_parts,
+    list_root_parts,
+)
 from parsers.bom import parse_messy_bom
 from scalar_fastapi import get_scalar_api_reference
 
 from api.manufacturing import router as manufacturing_router
+from api.storage import router as storage_router
 
 app = FastAPI(title="Interlock API", description="Manufacturing Graph Intelligence")
 
@@ -34,6 +45,7 @@ app.add_middleware(
 
 app.include_router(auth_router)
 app.include_router(manufacturing_router)
+app.include_router(storage_router)
 
 
 @app.middleware("http")
@@ -125,6 +137,120 @@ def _describe_image_with_ai(content: bytes, filename: str) -> str:
         max_completion_tokens=4096,
     )
     return response.choices[0].message.content or ""
+
+
+@app.post("/agent/sessions")
+async def create_session_endpoint(
+    title: str | None = Form(None),
+    current_user: dict = Depends(require_ai_access),
+):
+    """Create a new chat session."""
+    session = create_chat_session(current_user["id"], title)
+    return session
+
+
+@app.get("/agent/sessions")
+async def list_sessions_endpoint(
+    current_user: dict = Depends(require_ai_access),
+):
+    """List all chat sessions for the current user."""
+    return list_chat_sessions(current_user["id"])
+
+
+@app.get("/agent/sessions/{session_id}/messages")
+async def get_session_messages_endpoint(
+    session_id: UUID,
+    current_user: dict = Depends(require_ai_access),
+):
+    """Get all messages for a specific session."""
+    session = get_chat_session(session_id)
+    if not session or str(session.user_id) != str(current_user["id"]):
+        raise HTTPException(status_code=404, detail="Session not found")
+    return get_chat_messages(session_id)
+
+
+@app.post("/agent/sessions/{session_id}/chat")
+async def chat_session_stream(
+    session_id: UUID,
+    message: str = Form(""),
+    file: UploadFile | None = File(None),
+    current_user: dict = Depends(require_ai_access),
+):
+    """
+    Chat with the agent in a specific session with streaming updates.
+    """
+    session = get_chat_session(session_id)
+    if not session or str(session.user_id) != str(current_user["id"]):
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    content_blocks: list[dict[str, Any]] = []
+
+    if file:
+        file_content = await file.read()
+        filename = file.filename or "unknown"
+        ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
+
+        if ext == "pdf":
+            pdf_text = _extract_pdf_text(file_content)
+            content_blocks.append({"type": "text", "text": f"[Extracted text from uploaded PDF '{filename}']\n{pdf_text}"})
+            pdf_images = _pdf_to_images(file_content)
+            for img_url in pdf_images:
+                content_blocks.append({"type": "image_url", "image_url": {"url": img_url}})
+        elif ext in ("png", "jpg", "jpeg", "gif", "webp"):
+            mime = {"png": "image/png", "jpg": "image/jpeg", "jpeg": "image/jpeg", "gif": "image/gif", "webp": "image/webp"}.get(ext, f"image/{ext}")
+            b64 = base64.b64encode(file_content).decode("utf-8")
+            content_blocks.append({"type": "text", "text": f"[Uploaded image: {filename}]"})
+            content_blocks.append({"type": "image_url", "image_url": {"url": f"data:{mime};base64,{b64}"}})
+        else:
+            try:
+                text_content = file_content.decode("utf-8")
+                content_blocks.append({"type": "text", "text": f"[Content of uploaded file '{filename}']\n{text_content}"})
+            except UnicodeDecodeError:
+                content_blocks.append({"type": "text", "text": f"[Uploaded binary file '{filename}' — {len(file_content)} bytes, could not decode as text]"})
+
+    if message:
+        content_blocks.append({"type": "text", "text": message})
+
+    if not content_blocks:
+        raise HTTPException(status_code=400, detail="No message or file provided")
+
+    user_content = content_blocks if len(content_blocks) > 1 or content_blocks[0]["type"] != "text" else content_blocks[0]["text"]
+
+    # Save user message
+    add_chat_message(session_id, "user", user_content)
+
+    # Fetch history
+    history_msgs = get_chat_messages(session_id)
+    # Exclude the message we just added
+    history_dicts = [{"role": m.role, "content": m.content} for m in history_msgs[:-1]]
+
+    async def event_generator():
+        full_response = ""
+        tool_calls = []
+        try:
+            async for event in stream_tech_transfer_agent(user_content, history_dicts):
+                if event["type"] == "content":
+                    full_response += event["content"]
+                elif event["type"] == "tool_start":
+                    tool_calls.append({"tool": event["tool"], "input": event["input"], "output": None})
+                elif event["type"] == "tool_end":
+                    # Find the matching tool start and update output
+                    for tc in reversed(tool_calls):
+                        if tc["tool"] == event["tool"] and tc["output"] is None:
+                            tc["output"] = event["output"]
+                            break
+
+                yield f"data: {json.dumps(event)}\n\n"
+
+            # After stream ends, save assistant message
+            add_chat_message(session_id, "assistant", full_response, tool_calls)
+            yield "data: [DONE]\n\n"
+        except Exception as e:
+            logger = logging.getLogger("api")
+            logger.exception("Error in streaming agent: %s", e)
+            yield f"data: {json.dumps({'type': 'error', 'content': str(e)})}\n\n"
+
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
 
 
 @app.post("/agent/chat")

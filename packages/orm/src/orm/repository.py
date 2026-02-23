@@ -31,6 +31,7 @@ from models.main import (
     CurrencyAmount,
     CurrencyNode,
     CurrencyQuantity,
+    FileAttachment,
     LaborNode,
     LaborQuantity,
     OperationInputCurrency,
@@ -650,6 +651,54 @@ class GraphRepository:
             except Exception:
                 session.rollback()
                 raise
+
+    # ===============================================================
+    # File Attachments
+    # ===============================================================
+
+    def add_file_attachment(
+        self,
+        name: str,
+        storage_path: str,
+        node_id: UUID,
+        content_type: str | None = None,
+        size: int | None = None,
+        owner_id: UUID | None = None,
+    ) -> FileAttachment:
+        with self.db.session as session:
+            attachment = FileAttachment(
+                name=name,
+                storage_path=storage_path,
+                content_type=content_type,
+                size=size,
+                node_id=node_id,
+                owner_id=owner_id,
+            )
+            session.add(attachment)
+            session.commit()
+            session.refresh(attachment)
+            return attachment
+
+    def list_file_attachments(
+        self,
+        node_id: UUID,
+    ) -> list[FileAttachment]:
+        with self.db.session as session:
+            statement = select(FileAttachment).where(FileAttachment.node_id == node_id)
+            return list(session.exec(statement).all())
+
+    def get_file_attachment(self, attachment_id: UUID) -> FileAttachment | None:
+        with self.db.session as session:
+            return session.get(FileAttachment, attachment_id)
+
+    def delete_file_attachment(self, attachment_id: UUID) -> bool:
+        with self.db.session as session:
+            attachment = session.get(FileAttachment, attachment_id)
+            if not attachment:
+                return False
+            session.delete(attachment)
+            session.commit()
+            return True
 
     # ===============================================================
     # Validation

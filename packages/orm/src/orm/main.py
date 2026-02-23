@@ -7,14 +7,17 @@ For stateful usage, instantiate ``GraphRepository`` directly.
 
 from __future__ import annotations
 
+from typing import Any
 from uuid import UUID
 
 from database.manager import DatabaseManager
+from models.chat import ChatMessage, ChatSession
 from models.main import (
     BaseNode,
     CurrencyAmount,
     CurrencyNode,
     CurrencyQuantity,
+    FileAttachment,
     LaborNode,
     LaborQuantity,
     OperationNode,
@@ -26,6 +29,7 @@ from models.main import (
     ToolQuantity,
 )
 
+from orm.chat import ChatRepository
 from orm.repository import (
     GraphRepository,
     ValidationResult,
@@ -83,8 +87,20 @@ __all__ = [
     "get_bom",
     # Operation Updates
     "update_operation_inputs",
+    # File Attachments
+    "add_file_attachment",
+    "list_file_attachments",
+    "get_file_attachment",
+    "delete_file_attachment",
     # Validation
     "validate_tree",
+    # Chat
+    "ChatRepository",
+    "create_chat_session",
+    "list_chat_sessions",
+    "get_chat_session",
+    "add_chat_message",
+    "get_chat_messages",
 ]
 
 
@@ -93,6 +109,7 @@ __all__ = [
 
 _shared_db: DatabaseManager | None = None
 _shared_repo: GraphRepository | None = None
+_shared_chat_repo: ChatRepository | None = None
 
 
 def _repo(db: DatabaseManager | None = None) -> GraphRepository:
@@ -401,6 +418,51 @@ def update_operation_inputs(
     )
 
 
+# ── File Attachments ──────────────────────────────────────────────
+
+
+def add_file_attachment(
+    name: str,
+    storage_path: str,
+    node_id: UUID,
+    content_type: str | None = None,
+    size: int | None = None,
+    owner_id: UUID | None = None,
+    db: DatabaseManager | None = None,
+) -> FileAttachment:
+    return _repo(db).add_file_attachment(
+        name=name,
+        storage_path=storage_path,
+        node_id=node_id,
+        content_type=content_type,
+        size=size,
+        owner_id=owner_id,
+    )
+
+
+def list_file_attachments(
+    node_id: UUID,
+    db: DatabaseManager | None = None,
+) -> list[FileAttachment]:
+    return _repo(db).list_file_attachments(
+        node_id=node_id,
+    )
+
+
+def get_file_attachment(
+    attachment_id: UUID,
+    db: DatabaseManager | None = None,
+) -> FileAttachment | None:
+    return _repo(db).get_file_attachment(attachment_id)
+
+
+def delete_file_attachment(
+    attachment_id: UUID,
+    db: DatabaseManager | None = None,
+) -> bool:
+    return _repo(db).delete_file_attachment(attachment_id)
+
+
 # ── Validation ────────────────────────────────────────────────────
 
 
@@ -409,3 +471,56 @@ def validate_tree(
     db: DatabaseManager | None = None,
 ) -> ValidationResult:
     return _repo(db).validate_tree(root_id)
+
+
+# ── Chat ──────────────────────────────────────────────────────────
+
+
+def _chat_repo(db: DatabaseManager | None = None) -> ChatRepository:
+    global _shared_db, _shared_chat_repo
+    if db is not None:
+        return ChatRepository(db)
+    if _shared_chat_repo is None:
+        if _shared_db is None:
+            _shared_db = DatabaseManager()
+        _shared_chat_repo = ChatRepository(_shared_db)
+    return _shared_chat_repo
+
+
+def create_chat_session(
+    user_id: UUID,
+    title: str | None = None,
+    db: DatabaseManager | None = None,
+) -> ChatSession:
+    return _chat_repo(db).create_session(user_id, title)
+
+
+def list_chat_sessions(
+    user_id: UUID,
+    db: DatabaseManager | None = None,
+) -> list[ChatSession]:
+    return _chat_repo(db).list_sessions(user_id)
+
+
+def get_chat_session(
+    session_id: UUID,
+    db: DatabaseManager | None = None,
+) -> ChatSession | None:
+    return _chat_repo(db).get_session(session_id)
+
+
+def add_chat_message(
+    session_id: UUID,
+    role: str,
+    content: Any,
+    tool_calls: Any | None = None,
+    db: DatabaseManager | None = None,
+) -> ChatMessage:
+    return _chat_repo(db).add_message(session_id, role, content, tool_calls)
+
+
+def get_chat_messages(
+    session_id: UUID,
+    db: DatabaseManager | None = None,
+) -> list[ChatMessage]:
+    return _chat_repo(db).get_messages(session_id)
