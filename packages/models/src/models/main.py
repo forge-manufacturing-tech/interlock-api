@@ -1,4 +1,5 @@
-from datetime import UTC, datetime
+from __future__ import annotations
+
 from enum import StrEnum
 from typing import Any
 from uuid import UUID, uuid4
@@ -200,28 +201,6 @@ class QuantityInput(QuantityBase):
     resource_id: UUID
 
 
-# --- Blob Storage ---
-
-
-class FileAttachment(SQLModel, table=True):
-    """
-    Reference to a file stored in blob storage.
-    Associated with either a Part or an Operation.
-    """
-
-    __tablename__ = "file_attachments"
-
-    id: UUID = Field(default_factory=uuid4, primary_key=True)
-    name: str = Field(index=True)
-    storage_path: str
-    content_type: str | None = None
-    size: int | None = None
-    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
-    owner_id: UUID | None = Field(default=None)
-
-    node_id: UUID = Field(index=True)
-
-
 __all__ = [
     "OpType",
     "BaseNode",
@@ -236,7 +215,6 @@ __all__ = [
     "ToolQuantity",
     "CurrencyQuantity",
     "QuantityInput",
-    "FileAttachment",
     "CurrencyAmount",
     "OperationInputParts",
     "OperationInputLabor",

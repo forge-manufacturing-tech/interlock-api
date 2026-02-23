@@ -35,9 +35,8 @@ export default function DashboardLayout() {
 
       {/* Left Sidebar */}
       <aside
-        className={`fixed inset-y-0 left-0 z-40 flex w-60 flex-col border-r border-border bg-surface-light transition-transform lg:static lg:translate-x-0 ${
-          sidebarOpen ? "translate-x-0" : "-translate-x-full"
-        }`}
+        className={`fixed inset-y-0 left-0 z-40 flex w-60 flex-col border-r border-border bg-surface-light transition-transform lg:static lg:translate-x-0 ${sidebarOpen ? "translate-x-0" : "-translate-x-full"
+          }`}
       >
         <div className="flex h-14 items-center justify-between border-b border-border px-4">
           <span className="font-mono text-lg font-bold uppercase tracking-widest text-primary">
@@ -61,10 +60,9 @@ export default function DashboardLayout() {
                 end={end}
                 onClick={() => setSidebarOpen(false)}
                 className={({ isActive }) =>
-                  `flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors no-underline ${
-                    isActive
-                      ? "border-l-2 border-primary bg-white/5 text-primary"
-                      : "border-l-2 border-transparent text-text-secondary hover:bg-white/5 hover:text-text-primary"
+                  `flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors no-underline ${isActive
+                    ? "border-l-2 border-primary bg-white/5 text-primary"
+                    : "border-l-2 border-transparent text-text-secondary hover:bg-white/5 hover:text-text-primary"
                   }`
                 }
               >
@@ -106,16 +104,12 @@ export default function DashboardLayout() {
             {showAgentSidebar && (
               <button
                 onClick={() => setIsAgentOpen(!isAgentOpen)}
-                className={`flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium transition-all ${
-                  isAgentOpen
+                className={`flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium transition-all ${isAgentOpen
                     ? "bg-primary text-white shadow-md hover:bg-primary/90"
                     : "bg-surface-light border border-border text-text-secondary hover:text-primary hover:border-primary"
-                }`}
+                  }`}
               >
-                <Sparkles
-                  size={16}
-                  className={isAgentOpen ? "animate-pulse" : ""}
-                />
+                <Sparkles size={16} className={isAgentOpen ? "animate-pulse" : ""} />
                 {isAgentOpen ? "Agent Active" : "Ask Agent"}
               </button>
             )}
@@ -128,9 +122,7 @@ export default function DashboardLayout() {
             sidebar={<AgentChat className="h-full" />}
           />
         ) : (
-          <div
-            className={`flex-1 overflow-auto scrollbar-thin scrollbar-thumb-border scrollbar-track-transparent ${location.pathname.startsWith("/dashboard/parts/") ? "" : "p-6"}`}
-          >
+          <div className={`flex-1 overflow-auto scrollbar-thin scrollbar-thumb-border scrollbar-track-transparent ${location.pathname.startsWith('/dashboard/parts/') ? '' : 'p-6'}`}>
             <Outlet />
           </div>
         )}

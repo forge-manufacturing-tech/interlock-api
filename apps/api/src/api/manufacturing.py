@@ -88,6 +88,7 @@ class UpdateOperationRequest(BaseModel):
     name: str | None = None
     description: str | None = None
     instructions: str | None = None
+    op_type: OpType | None = None
     yield_rate: float | None = None
     setup_time_minutes: float | None = None
     estimated_duration_minutes: float | None = None
@@ -318,6 +319,8 @@ async def patch_operation_endpoint(
         op.description = req.description
     if req.instructions is not None:
         op.instructions = req.instructions
+    if req.op_type is not None:
+        op.op_type = req.op_type
     if req.yield_rate is not None:
         op.yield_rate = req.yield_rate
     if req.setup_time_minutes is not None:

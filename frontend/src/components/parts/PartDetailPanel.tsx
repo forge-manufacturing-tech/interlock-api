@@ -1,10 +1,6 @@
 import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import {
-  ManufacturingService,
-  DefaultService,
-  StorageService,
-} from "../../api";
+import { ManufacturingService, DefaultService } from "../../api";
 import type { PartNode } from "../../api";
 import {
   X,
@@ -19,9 +15,6 @@ import {
   Hammer,
   Package,
   Plus,
-  Paperclip,
-  Upload,
-  Download,
 } from "lucide-react";
 import BOMWizardModal from "./BOMWizardModal";
 
@@ -55,7 +48,7 @@ export default function PartDetailPanel({
   const [editUnit, setEditUnit] = useState(node.unit_of_measure || "each");
 
   // Operation editing state
-  const operation = (node.children || []).find((c) => c.type === "operation");
+  const operation = node.type === 'operation' ? node : (node.children || []).find((c) => c.type === "operation");
   const [opYield, setOpYield] = useState(Number(operation?.yield_rate ?? 1.0));
   const [opSetup, setOpSetup] = useState(
     Number(operation?.setup_time_minutes ?? 0),
@@ -69,10 +62,9 @@ export default function PartDetailPanel({
 
   // Input quantities state
   const initialInputs = useMemo(
-    () => operation?.children || node.children || [],
+    () => (operation?.children || node.children || []) as NodeData[],
     [operation, node],
   );
-  const [prevInitialInputs, setPrevInitialInputs] = useState(initialInputs);
   const [inputQtys, setInputQtys] = useState<Record<string, number>>(() =>
     Object.fromEntries(
       initialInputs.map((c) => [c.id!, Number(c.quantity || 0)]),
@@ -84,23 +76,8 @@ export default function PartDetailPanel({
     ),
   );
   const [activeInputs, setActiveInputs] = useState<NodeData[]>(
-    initialInputs as NodeData[],
+    () => initialInputs,
   );
-
-  if (initialInputs !== prevInitialInputs) {
-    setPrevInitialInputs(initialInputs);
-    setInputQtys(
-      Object.fromEntries(
-        initialInputs.map((c) => [c.id!, Number(c.quantity || 0)]),
-      ),
-    );
-    setInputUnits(
-      Object.fromEntries(
-        initialInputs.map((c) => [c.id!, (c.unit as string) || ""]),
-      ),
-    );
-    setActiveInputs(initialInputs as NodeData[]);
-  }
 
   const { data: allParts } = useQuery({
     queryKey: ["trees"],
@@ -151,36 +128,6 @@ export default function PartDetailPanel({
       onClose();
     },
   });
-
-  const { data: nodeFiles, refetch: refetchNodeFiles } = useQuery({
-    queryKey: ["node", node.id, "files"],
-    queryFn: () => StorageService.listNodeFilesNodesNodeIdFilesGet(node.id!),
-    enabled: !!node.id,
-  });
-
-  const uploadNodeFileMutation = useMutation({
-    mutationFn: (file: File) =>
-      StorageService.uploadNodeFileNodesNodeIdFilesPost(node.id!, { file }),
-    onSuccess: () => refetchNodeFiles(),
-  });
-
-  const deleteFileMutation = useMutation({
-    mutationFn: (fileId: string) =>
-      StorageService.deleteFileEndpointFilesFileIdDelete(fileId),
-    onSuccess: () => refetchNodeFiles(),
-  });
-
-  const handleDownload = async (fileId: string) => {
-    try {
-      const resp =
-        await StorageService.getFileDownloadUrlFilesFileIdDownloadGet(fileId);
-      if (resp?.url) {
-        window.open(resp.url, "_blank");
-      }
-    } catch (e) {
-      console.error("Download failed", e);
-    }
-  };
 
   const opMutation = useMutation({
     mutationFn: async () => {
@@ -255,31 +202,21 @@ export default function PartDetailPanel({
     }
   };
 
-  const inputs = isEditing
-    ? activeInputs
-    : operation?.children || node.children || [];
+  const inputs = isEditing ? activeInputs : (operation?.children || node.children || []);
 
   const handleAddInput = (part: PartNode) => {
-    if (activeInputs.some((i) => i.id === part.id)) return;
-    setActiveInputs([
-      ...activeInputs,
-      { ...part, type: "part", quantity: 1 } as NodeData,
-    ]);
+    if (activeInputs.some(i => i.id === part.id)) return;
+    setActiveInputs([...activeInputs, { ...part, type: 'part', quantity: 1 } as NodeData]);
     setInputQtys({ ...inputQtys, [part.id!]: 1 });
-    setInputUnits({
-      ...inputUnits,
-      [part.id!]: part.unit_of_measure || "each",
-    });
+    setInputUnits({ ...inputUnits, [part.id!]: part.unit_of_measure || 'each' });
   };
 
   const handleRemoveInput = (id: string) => {
-    setActiveInputs(activeInputs.filter((i) => i.id !== id));
+    setActiveInputs(activeInputs.filter(i => i.id !== id));
   };
 
   // Group inputs by type for better display
-  const childParts = (inputs as NodeData[]).filter(
-    (c) => c.type === "part" || !c.type,
-  );
+  const childParts = (inputs as NodeData[]).filter((c) => c.type === "part" || !c.type);
   const childLabor = inputs.filter((c) => c.type === "labor");
   const childTools = inputs.filter((c) => c.type === "tool");
   const childCurrencies = inputs.filter((c) => c.type === "currency");
@@ -453,17 +390,15 @@ export default function PartDetailPanel({
                     <Plus size={14} />
                   </button>
                   <div className="absolute right-0 top-full mt-1 hidden group-hover:block z-30 bg-surface-light border border-border rounded shadow-xl max-h-48 overflow-y-auto w-48">
-                    {allParts
-                      ?.filter((p) => p.id !== node.id)
-                      .map((p) => (
-                        <button
-                          key={p.id}
-                          onClick={() => handleAddInput(p)}
-                          className="w-full text-left px-3 py-2 text-[10px] hover:bg-primary/10 transition-colors border-b border-border last:border-0"
-                        >
-                          {p.name}
-                        </button>
-                      ))}
+                    {allParts?.filter(p => p.id !== node.id).map(p => (
+                      <button
+                        key={p.id}
+                        onClick={() => handleAddInput(p)}
+                        className="w-full text-left px-3 py-2 text-[10px] hover:bg-primary/10 transition-colors border-b border-border last:border-0"
+                      >
+                        {p.name}
+                      </button>
+                    ))}
                   </div>
                 </div>
               )}
@@ -804,87 +739,6 @@ export default function PartDetailPanel({
                 </div>
               </div>
             )}
-          </div>
-        </div>
-
-        {/* Files & Attachments */}
-        <div className="space-y-4 pt-4 border-t border-border">
-          <h4 className="text-xs font-bold uppercase tracking-wider text-text-muted">
-            Files & Attachments
-          </h4>
-
-          <div className="space-y-4">
-            {/* Node Files */}
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2 text-sm font-semibold text-text-primary">
-                  <Paperclip size={16} className="text-blue-500" />
-                  Attachments
-                </div>
-                <label className="cursor-pointer flex items-center gap-1 px-2 py-1 rounded bg-blue-500/10 text-blue-500 hover:bg-blue-500/20 text-[10px] font-bold transition-colors">
-                  <Upload size={12} />
-                  Upload
-                  <input
-                    type="file"
-                    className="hidden"
-                    onChange={(e) => {
-                      if (e.target.files?.[0]) {
-                        uploadNodeFileMutation.mutate(e.target.files[0]);
-                      }
-                      e.target.value = ""; // Reset input
-                    }}
-                  />
-                </label>
-              </div>
-              <div className="grid grid-cols-1 gap-2">
-                {!nodeFiles || nodeFiles.length === 0 ? (
-                  <p className="text-xs text-text-muted italic">
-                    No files attached.
-                  </p>
-                ) : (
-                  nodeFiles.map((file) => (
-                    <div
-                      key={file.id}
-                      className="flex justify-between items-center bg-surface-light p-2 rounded border border-border"
-                    >
-                      <div className="flex flex-col truncate pr-2">
-                        <span
-                          className="text-xs font-medium text-text-primary truncate"
-                          title={file.name}
-                        >
-                          {file.name}
-                        </span>
-                        <span className="text-[10px] text-text-muted">
-                          {file.size
-                            ? (file.size / 1024).toFixed(1) + " KB"
-                            : "Unknown size"}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-1 shrink-0">
-                        <button
-                          onClick={() => file.id && handleDownload(file.id)}
-                          className="p-1.5 rounded hover:bg-surface-hover text-text-secondary hover:text-primary transition-colors"
-                          title="Download"
-                        >
-                          <Download size={14} />
-                        </button>
-                        <button
-                          onClick={() =>
-                            file.id &&
-                            window.confirm("Delete this file?") &&
-                            deleteFileMutation.mutate(file.id)
-                          }
-                          className="p-1.5 rounded hover:bg-surface-hover text-text-secondary hover:text-destructive transition-colors"
-                          title="Delete"
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
           </div>
         </div>
       </div>

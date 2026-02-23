@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ManufacturingService, DefaultService } from "../../api";
 import type { PurchaseRequest, AssembleRequest } from "../../api";
+import type { NodeData } from "../../types/parts";
 import {
   X,
   ShoppingCart,
@@ -14,6 +15,8 @@ import {
 
 interface CreatePartModalProps {
   onClose: () => void;
+  onSuccess?: (newPart: NodeData) => void;
+  initialInputs?: { id: string; qty: number }[];
 }
 
 interface CommonNode {
@@ -21,9 +24,9 @@ interface CommonNode {
   name?: string | null;
 }
 
-export default function CreatePartModal({ onClose }: CreatePartModalProps) {
+export default function CreatePartModal({ onClose, onSuccess, initialInputs = [] }: CreatePartModalProps) {
   const [activeTab, setActiveTab] = useState<"purchase" | "assemble">(
-    "purchase",
+    initialInputs.length > 0 ? "assemble" : "purchase",
   );
   const queryClient = useQueryClient();
 
@@ -36,7 +39,7 @@ export default function CreatePartModal({ onClose }: CreatePartModalProps) {
   // Assemble State
   const [aName, setAName] = useState("");
   const [aDesc, setADesc] = useState("");
-  const [inputs, setInputs] = useState<{ id: string; qty: number }[]>([]);
+  const [inputs, setInputs] = useState<{ id: string; qty: number }[]>(initialInputs);
   const [labors, setLabors] = useState<{ id: string; qty: number }[]>([]);
   const [tools, setTools] = useState<{ id: string; qty: number }[]>([]);
 
@@ -59,8 +62,9 @@ export default function CreatePartModal({ onClose }: CreatePartModalProps) {
   const purchaseMutation = useMutation({
     mutationFn: (data: PurchaseRequest) =>
       ManufacturingService.purchaseMaterialEndpointPartsPurchasePost(data),
-    onSuccess: () => {
+    onSuccess: (newPart) => {
       queryClient.invalidateQueries({ queryKey: ["trees"] });
+      if (onSuccess) onSuccess(newPart);
       onClose();
     },
   });
@@ -68,8 +72,9 @@ export default function CreatePartModal({ onClose }: CreatePartModalProps) {
   const assembleMutation = useMutation({
     mutationFn: (data: AssembleRequest) =>
       ManufacturingService.assemblePartEndpointPartsAssemblePost(data),
-    onSuccess: () => {
+    onSuccess: (newPart) => {
       queryClient.invalidateQueries({ queryKey: ["trees"] });
+      if (onSuccess) onSuccess(newPart);
       onClose();
     },
   });

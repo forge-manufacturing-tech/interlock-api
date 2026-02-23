@@ -14,10 +14,8 @@ export type { Body_chat_agent_agent_chat_post } from './models/Body_chat_agent_a
 export type { Body_chat_session_stream_agent_sessions__session_id__chat_post } from './models/Body_chat_session_stream_agent_sessions__session_id__chat_post';
 export type { Body_create_session_endpoint_agent_sessions_post } from './models/Body_create_session_endpoint_agent_sessions_post';
 export type { Body_ingest_bom_ingest_bom_post } from './models/Body_ingest_bom_ingest_bom_post';
-export type { Body_upload_node_file_nodes__node_id__files_post } from './models/Body_upload_node_file_nodes__node_id__files_post';
 export type { CreateLaborRequest } from './models/CreateLaborRequest';
 export type { CreateToolRequest } from './models/CreateToolRequest';
-export type { FileAttachment } from './models/FileAttachment';
 export type { HTTPValidationError } from './models/HTTPValidationError';
 export type { LaborNode } from './models/LaborNode';
 export type { ModifyPartRequest } from './models/ModifyPartRequest';
@@ -41,4 +39,3 @@ export type { ValidationError } from './models/ValidationError';
 export { AuthenticationService } from './services/AuthenticationService';
 export { DefaultService } from './services/DefaultService';
 export { ManufacturingService } from './services/ManufacturingService';
-export { StorageService } from './services/StorageService';
