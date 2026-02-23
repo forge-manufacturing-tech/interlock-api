@@ -5,12 +5,14 @@ import { DefaultService } from "../api";
 import { ArrowLeft, Box } from "lucide-react";
 import PartFlowVisualizer from "../components/parts/PartFlowVisualizer";
 import PartDetailPanel from "../components/parts/PartDetailPanel";
+import AddChildModal from "../components/parts/AddChildModal";
 import type { NodeData } from "../types/parts";
 
 export default function PartVisualizerPage() {
   const { partId } = useParams<{ partId: string }>();
   const navigate = useNavigate();
   const [selectedNode, setSelectedNode] = useState<NodeData | null>(null);
+  const [addChildNode, setAddChildNode] = useState<NodeData | null>(null);
 
   const {
     data: treeData,
@@ -70,7 +72,7 @@ export default function PartVisualizerPage() {
           treeData={treeData as NodeData}
           onSelectNode={(node) => setSelectedNode(node)}
           onAddChild={(node) => {
-            setSelectedNode(node);
+            setAddChildNode(node);
           }}
           selectedId={selectedNode?.id}
         />
@@ -90,6 +92,14 @@ export default function PartVisualizerPage() {
             onClose={() => setSelectedNode(null)}
           />
         </div>
+      )}
+
+      {addChildNode && (
+        <AddChildModal
+          isOpen={!!addChildNode}
+          onClose={() => setAddChildNode(null)}
+          parentNode={addChildNode}
+        />
       )}
     </div>
   );

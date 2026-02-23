@@ -626,6 +626,17 @@ class GraphRepository:
     ) -> None:
         """Atomically replace all inputs for an operation."""
         with self.db.session as session:
+            op = session.get(OperationNode, op_id)
+            if not op:
+                raise ValueError(f"Operation {op_id} not found")
+
+            if op.op_type == OpType.PURCHASE:
+                if input_parts or input_labor or input_tools:
+                    raise ValueError("PURCHASE operations can only have currency inputs.")
+            else:
+                if input_currencies:
+                    raise ValueError("STANDARD operations cannot have currency inputs.")
+
             try:
                 if input_parts is not None:
                     session.exec(delete(OperationInputParts).where(col(OperationInputParts.operation_id) == op_id))

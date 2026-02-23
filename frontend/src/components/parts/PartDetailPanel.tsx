@@ -1,6 +1,10 @@
 import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { ManufacturingService } from "../../api";
+import {
+  ManufacturingService,
+  DefaultService,
+  StorageService,
+} from "../../api";
 import type { PartNode } from "../../api";
 import {
   X,
@@ -14,6 +18,10 @@ import {
   Cuboid,
   Hammer,
   Package,
+  Plus,
+  Paperclip,
+  Upload,
+  Download,
 } from "lucide-react";
 import BOMWizardModal from "./BOMWizardModal";
 
@@ -151,18 +159,21 @@ export default function PartDetailPanel({
   });
 
   const uploadNodeFileMutation = useMutation({
-    mutationFn: (file: File) => StorageService.uploadNodeFileNodesNodeIdFilesPost(node.id!, { file }),
+    mutationFn: (file: File) =>
+      StorageService.uploadNodeFileNodesNodeIdFilesPost(node.id!, { file }),
     onSuccess: () => refetchNodeFiles(),
   });
 
   const deleteFileMutation = useMutation({
-    mutationFn: (fileId: string) => StorageService.deleteFileEndpointFilesFileIdDelete(fileId),
+    mutationFn: (fileId: string) =>
+      StorageService.deleteFileEndpointFilesFileIdDelete(fileId),
     onSuccess: () => refetchNodeFiles(),
   });
 
   const handleDownload = async (fileId: string) => {
     try {
-      const resp = await StorageService.getFileDownloadUrlFilesFileIdDownloadGet(fileId);
+      const resp =
+        await StorageService.getFileDownloadUrlFilesFileIdDownloadGet(fileId);
       if (resp?.url) {
         window.open(resp.url, "_blank");
       }
@@ -528,156 +539,156 @@ export default function PartDetailPanel({
         {(childLabor.length > 0 ||
           childTools.length > 0 ||
           childCurrencies.length > 0) && (
-            <div className="space-y-4 pt-4 border-t border-border">
-              <h4 className="text-xs font-bold uppercase tracking-wider text-text-muted">
-                Resources & Costs
-              </h4>
+          <div className="space-y-4 pt-4 border-t border-border">
+            <h4 className="text-xs font-bold uppercase tracking-wider text-text-muted">
+              Resources & Costs
+            </h4>
 
-              <div className="space-y-4">
-                {childLabor.length > 0 && (
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-1.5 text-xs font-medium text-text-secondary">
-                      <Hammer size={12} className="text-amber-500" /> Labor
-                    </div>
-                    <div className="grid grid-cols-2 gap-2">
-                      {childLabor.map((l) => (
-                        <div
-                          key={l.id}
-                          className="p-2 rounded bg-amber-500/5 border border-amber-500/10"
-                        >
-                          <p className="text-xs font-medium text-text-primary truncate">
-                            {l.name}
-                          </p>
-                          {isEditing ? (
-                            <div className="mt-1 flex gap-1">
-                              <input
-                                type="number"
-                                className="w-full text-[10px] bg-surface border border-border rounded px-1"
-                                value={inputQtys[l.id!] ?? 0}
-                                onChange={(e) =>
-                                  setInputQtys({
-                                    ...inputQtys,
-                                    [l.id!]: parseFloat(e.target.value),
-                                  })
-                                }
-                              />
-                              <input
-                                type="text"
-                                className="w-full text-[10px] bg-surface border border-border rounded px-1"
-                                value={inputUnits[l.id!] ?? "hours"}
-                                onChange={(e) =>
-                                  setInputUnits({
-                                    ...inputUnits,
-                                    [l.id!]: e.target.value,
-                                  })
-                                }
-                              />
-                            </div>
-                          ) : (
-                            <p className="text-[10px] text-text-muted">
-                              {l.quantity} {l.unit || "hours"}
-                            </p>
-                          )}
-                        </div>
-                      ))}
-                    </div>
+            <div className="space-y-4">
+              {childLabor.length > 0 && (
+                <div className="space-y-2">
+                  <div className="flex items-center gap-1.5 text-xs font-medium text-text-secondary">
+                    <Hammer size={12} className="text-amber-500" /> Labor
                   </div>
-                )}
-                {childTools.length > 0 && (
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-1.5 text-xs font-medium text-text-secondary">
-                      <Wrench size={12} className="text-purple-500" /> Tools
-                    </div>
-                    <div className="grid grid-cols-2 gap-2">
-                      {childTools.map((t) => (
-                        <div
-                          key={t.id}
-                          className="p-2 rounded bg-purple-500/5 border border-purple-500/10"
-                        >
-                          <p className="text-xs font-medium text-text-primary truncate">
-                            {t.name}
+                  <div className="grid grid-cols-2 gap-2">
+                    {childLabor.map((l) => (
+                      <div
+                        key={l.id}
+                        className="p-2 rounded bg-amber-500/5 border border-amber-500/10"
+                      >
+                        <p className="text-xs font-medium text-text-primary truncate">
+                          {l.name}
+                        </p>
+                        {isEditing ? (
+                          <div className="mt-1 flex gap-1">
+                            <input
+                              type="number"
+                              className="w-full text-[10px] bg-surface border border-border rounded px-1"
+                              value={inputQtys[l.id!] ?? 0}
+                              onChange={(e) =>
+                                setInputQtys({
+                                  ...inputQtys,
+                                  [l.id!]: parseFloat(e.target.value),
+                                })
+                              }
+                            />
+                            <input
+                              type="text"
+                              className="w-full text-[10px] bg-surface border border-border rounded px-1"
+                              value={inputUnits[l.id!] ?? "hours"}
+                              onChange={(e) =>
+                                setInputUnits({
+                                  ...inputUnits,
+                                  [l.id!]: e.target.value,
+                                })
+                              }
+                            />
+                          </div>
+                        ) : (
+                          <p className="text-[10px] text-text-muted">
+                            {l.quantity} {l.unit || "hours"}
                           </p>
-                          {isEditing ? (
-                            <div className="mt-1 flex gap-1">
-                              <input
-                                type="number"
-                                className="w-full text-[10px] bg-surface border border-border rounded px-1"
-                                value={inputQtys[t.id!] ?? 0}
-                                onChange={(e) =>
-                                  setInputQtys({
-                                    ...inputQtys,
-                                    [t.id!]: parseFloat(e.target.value),
-                                  })
-                                }
-                              />
-                              <input
-                                type="text"
-                                className="w-full text-[10px] bg-surface border border-border rounded px-1"
-                                value={inputUnits[t.id!] ?? "hours"}
-                                onChange={(e) =>
-                                  setInputUnits({
-                                    ...inputUnits,
-                                    [t.id!]: e.target.value,
-                                  })
-                                }
-                              />
-                            </div>
-                          ) : (
-                            <p className="text-[10px] text-text-muted">
-                              {t.quantity} {t.unit || "hours"}
-                            </p>
-                          )}
-                        </div>
-                      ))}
-                    </div>
+                        )}
+                      </div>
+                    ))}
                   </div>
-                )}
-                {childCurrencies.length > 0 && (
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-1.5 text-xs font-medium text-text-secondary">
-                      <DollarSign size={12} className="text-emerald-500" />{" "}
-                      Purchase Cost
-                    </div>
-                    <div className="grid grid-cols-2 gap-2">
-                      {childCurrencies.map((c) => (
-                        <div
-                          key={c.id}
-                          className="p-2 rounded bg-emerald-500/5 border border-emerald-500/10"
-                        >
-                          <p className="text-xs font-medium text-text-primary truncate">
-                            {c.name}
+                </div>
+              )}
+              {childTools.length > 0 && (
+                <div className="space-y-2">
+                  <div className="flex items-center gap-1.5 text-xs font-medium text-text-secondary">
+                    <Wrench size={12} className="text-purple-500" /> Tools
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    {childTools.map((t) => (
+                      <div
+                        key={t.id}
+                        className="p-2 rounded bg-purple-500/5 border border-purple-500/10"
+                      >
+                        <p className="text-xs font-medium text-text-primary truncate">
+                          {t.name}
+                        </p>
+                        {isEditing ? (
+                          <div className="mt-1 flex gap-1">
+                            <input
+                              type="number"
+                              className="w-full text-[10px] bg-surface border border-border rounded px-1"
+                              value={inputQtys[t.id!] ?? 0}
+                              onChange={(e) =>
+                                setInputQtys({
+                                  ...inputQtys,
+                                  [t.id!]: parseFloat(e.target.value),
+                                })
+                              }
+                            />
+                            <input
+                              type="text"
+                              className="w-full text-[10px] bg-surface border border-border rounded px-1"
+                              value={inputUnits[t.id!] ?? "hours"}
+                              onChange={(e) =>
+                                setInputUnits({
+                                  ...inputUnits,
+                                  [t.id!]: e.target.value,
+                                })
+                              }
+                            />
+                          </div>
+                        ) : (
+                          <p className="text-[10px] text-text-muted">
+                            {t.quantity} {t.unit || "hours"}
                           </p>
-                          {isEditing ? (
-                            <div className="mt-1 flex gap-1">
-                              <input
-                                type="number"
-                                className="w-full text-[10px] bg-surface border border-border rounded px-1"
-                                value={inputQtys[c.id!] ?? 0}
-                                onChange={(e) =>
-                                  setInputQtys({
-                                    ...inputQtys,
-                                    [c.id!]: parseFloat(e.target.value),
-                                  })
-                                }
-                              />
-                              <span className="text-[10px] text-text-muted">
-                                {(c.iso_code as string) || "USD"}
-                              </span>
-                            </div>
-                          ) : (
-                            <p className="text-[10px] text-text-muted">
-                              ${c.quantity as number}{" "}
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {childCurrencies.length > 0 && (
+                <div className="space-y-2">
+                  <div className="flex items-center gap-1.5 text-xs font-medium text-text-secondary">
+                    <DollarSign size={12} className="text-emerald-500" />{" "}
+                    Purchase Cost
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    {childCurrencies.map((c) => (
+                      <div
+                        key={c.id}
+                        className="p-2 rounded bg-emerald-500/5 border border-emerald-500/10"
+                      >
+                        <p className="text-xs font-medium text-text-primary truncate">
+                          {c.name}
+                        </p>
+                        {isEditing ? (
+                          <div className="mt-1 flex gap-1">
+                            <input
+                              type="number"
+                              className="w-full text-[10px] bg-surface border border-border rounded px-1"
+                              value={inputQtys[c.id!] ?? 0}
+                              onChange={(e) =>
+                                setInputQtys({
+                                  ...inputQtys,
+                                  [c.id!]: parseFloat(e.target.value),
+                                })
+                              }
+                            />
+                            <span className="text-[10px] text-text-muted">
                               {(c.iso_code as string) || "USD"}
-                            </p>
-                          )}
-                        </div>
-                      ))}
-                    </div>
+                            </span>
+                          </div>
+                        ) : (
+                          <p className="text-[10px] text-text-muted">
+                            ${c.quantity as number}{" "}
+                            {(c.iso_code as string) || "USD"}
+                          </p>
+                        )}
+                      </div>
+                    ))}
                   </div>
-                )}
-              </div>
+                </div>
+              )}
             </div>
-          )}
+          </div>
+        )}
 
         {/* Financials & Logistics */}
         <div className="space-y-4 pt-4 border-t border-border">
@@ -826,20 +837,46 @@ export default function PartDetailPanel({
                 </label>
               </div>
               <div className="grid grid-cols-1 gap-2">
-                {(!nodeFiles || nodeFiles.length === 0) ? (
-                  <p className="text-xs text-text-muted italic">No files attached.</p>
+                {!nodeFiles || nodeFiles.length === 0 ? (
+                  <p className="text-xs text-text-muted italic">
+                    No files attached.
+                  </p>
                 ) : (
                   nodeFiles.map((file) => (
-                    <div key={file.id} className="flex justify-between items-center bg-surface-light p-2 rounded border border-border">
+                    <div
+                      key={file.id}
+                      className="flex justify-between items-center bg-surface-light p-2 rounded border border-border"
+                    >
                       <div className="flex flex-col truncate pr-2">
-                        <span className="text-xs font-medium text-text-primary truncate" title={file.name}>{file.name}</span>
-                        <span className="text-[10px] text-text-muted">{file.size ? (file.size / 1024).toFixed(1) + ' KB' : 'Unknown size'}</span>
+                        <span
+                          className="text-xs font-medium text-text-primary truncate"
+                          title={file.name}
+                        >
+                          {file.name}
+                        </span>
+                        <span className="text-[10px] text-text-muted">
+                          {file.size
+                            ? (file.size / 1024).toFixed(1) + " KB"
+                            : "Unknown size"}
+                        </span>
                       </div>
                       <div className="flex items-center gap-1 shrink-0">
-                        <button onClick={() => file.id && handleDownload(file.id)} className="p-1.5 rounded hover:bg-surface-hover text-text-secondary hover:text-primary transition-colors" title="Download">
+                        <button
+                          onClick={() => file.id && handleDownload(file.id)}
+                          className="p-1.5 rounded hover:bg-surface-hover text-text-secondary hover:text-primary transition-colors"
+                          title="Download"
+                        >
                           <Download size={14} />
                         </button>
-                        <button onClick={() => file.id && window.confirm("Delete this file?") && deleteFileMutation.mutate(file.id)} className="p-1.5 rounded hover:bg-surface-hover text-text-secondary hover:text-destructive transition-colors" title="Delete">
+                        <button
+                          onClick={() =>
+                            file.id &&
+                            window.confirm("Delete this file?") &&
+                            deleteFileMutation.mutate(file.id)
+                          }
+                          className="p-1.5 rounded hover:bg-surface-hover text-text-secondary hover:text-destructive transition-colors"
+                          title="Delete"
+                        >
                           <Trash2 size={14} />
                         </button>
                       </div>

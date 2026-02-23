@@ -72,18 +72,20 @@ const CustomPartNode = ({
           className="!w-3 !h-3 !bg-border !border-2 !border-surface"
         />
 
-        <div
-          onClick={(e) => {
-            if (data.onAddChild) {
-              e.stopPropagation();
-              data.onAddChild(data);
-            }
-          }}
-          className="absolute -right-3 -top-3 p-1.5 rounded-full bg-primary text-white shadow-lg hover:scale-110 transition-transform cursor-pointer z-10 opacity-0 group-hover:opacity-100"
-          title="Add Child Component"
-        >
-          <Plus size={16} strokeWidth={3} />
-        </div>
+        {nodeType === "operation" && (
+          <div
+            onClick={(e) => {
+              if (data.onAddChild) {
+                e.stopPropagation();
+                data.onAddChild(data);
+              }
+            }}
+            className="absolute -right-3 -top-3 p-1.5 rounded-full bg-primary text-white shadow-lg hover:scale-110 transition-transform cursor-pointer z-10 opacity-0 group-hover:opacity-100"
+            title="Add Child Component"
+          >
+            <Plus size={16} strokeWidth={3} />
+          </div>
+        )}
 
         <div className="flex items-start gap-3">
           <div
