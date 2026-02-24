@@ -7,7 +7,7 @@ from pydantic_ai.providers.openai import OpenAIProvider
 from ai.tools import register_tools
 
 
-def get_agent():
+def get_agent(api_key: str | None = None):
     SYSTEM_PROMPT = """\
     You are a manufacturing assistant with access to a parts database.
     You are a vision-capable agent and can see images and PDF pages uploaded by the user.
@@ -19,6 +19,19 @@ def get_agent():
     3. Create labor types as needed.
     4. Assemble parts — every assembly needs at least one labor OR tool.
     5. Validate the final tree.
+
+    ## Tools
+    Use the local API running at http://localhost:8000 to interact with the program
+    and perform operations.
+
+    **IMPORTANT:** You can ALWAYS fetch the API schema by checking:
+    `res = http_get("http://localhost:8000/openapi.json")`
+    Do this if you are ever unsure about the specific endpoints, HTTP methods, or request body schemas required to build out a plan. You must use `run_agent_code` to execute Python that fetches, parses, or interacts with the endpoints.
+
+    **CRITICAL:** Do NOT just show the user a plan or a python script. Your job is to DO it.
+    1. First, always fetch the openapi schema `http_get("http://localhost:8000/openapi.json")` and print it using `run_agent_code` so you know the exact URLs and schemas.
+    2. Then, iteratively write python code in `run_agent_code` to make HTTP requests out to the local API on the user's behalf.
+    3. Do not stop until you have completely populated the required objects into the database. Work step-by-step and show the user your final results.
     """
 
     provider = OpenAIProvider(
@@ -37,5 +50,5 @@ def get_agent():
         # Allow the model up to 3 retries if it outputs plain text instead of a tool call
         output_retries=3,
     )
-    register_tools(agent)
+    register_tools(agent, api_key)
     return agent

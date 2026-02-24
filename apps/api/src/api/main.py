@@ -8,8 +8,8 @@ from typing import Any
 from uuid import UUID
 
 import fitz
-from ai.agent import get_tech_transfer_agent, stream_tech_transfer_agent
-from auth.dependencies import get_current_user, require_ai_access
+from ai.agent import get_agent
+from auth.dependencies import get_current_user, get_user_token, require_ai_access
 from auth.routes import router as auth_router
 from fastapi import Depends, FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
@@ -175,6 +175,7 @@ async def chat_session_stream(
     message: str = Form(""),
     file: UploadFile | None = File(None),
     current_user: dict = Depends(require_ai_access),
+    user_token: str | None = Depends(get_user_token),
 ):
     """
     Chat with the agent in a specific session with streaming updates.
@@ -224,23 +225,28 @@ async def chat_session_stream(
     # Exclude the message we just added
     history_dicts = [{"role": m.role, "content": m.content} for m in history_msgs[:-1]]
 
+    agent = get_agent(api_key=user_token)
+
     async def event_generator():
         full_response = ""
         tool_calls = []
         try:
-            async for event in stream_tech_transfer_agent(user_content, history_dicts):
-                if event["type"] == "content":
-                    full_response += event["content"]
-                elif event["type"] == "tool_start":
-                    tool_calls.append({"tool": event["tool"], "input": event["input"], "output": None})
-                elif event["type"] == "tool_end":
-                    # Find the matching tool start and update output
-                    for tc in reversed(tool_calls):
-                        if tc["tool"] == event["tool"] and tc["output"] is None:
-                            tc["output"] = event["output"]
-                            break
+            from pydantic_ai.messages import ModelRequest, ToolCallPart
 
-                yield f"data: {json.dumps(event)}\n\n"
+            async with agent.run_stream(
+                user_content,
+                message_history=history_dicts,
+            ) as result:
+                async for text in result.stream_text(delta=True):
+                    full_response += text
+                    yield f"data: {json.dumps({'type': 'content', 'content': text})}\n\n"
+
+            # Extract tool calls from the new messages
+            for msg in result.new_messages():
+                if isinstance(msg, ModelRequest):
+                    for part in msg.parts:
+                        if isinstance(part, ToolCallPart):
+                            tool_calls.append({"tool": part.tool_name, "input": str(part.args), "output": None})
 
             # After stream ends, save assistant message
             add_chat_message(session_id, "assistant", full_response, tool_calls)
@@ -259,6 +265,7 @@ async def chat_agent(
     file: UploadFile | None = File(None),
     history: str | None = Form(None),
     current_user: dict = Depends(require_ai_access),
+    user_token: str | None = Depends(get_user_token),
 ):
     """
     Chat with the tech transfer agent.
@@ -313,17 +320,23 @@ async def chat_agent(
     # Add current user message to history
     conversation_history.append({"role": "user", "content": user_content})
 
-    agent = get_tech_transfer_agent()
-    try:
-        response = agent.invoke({"question": user_content, "history": conversation_history})
+    agent = get_agent(api_key=user_token)
 
-        # Handle dict response from agent (includes tool_calls)
-        if isinstance(response, dict):
-            response_str = str(response.get("response", ""))
-            tool_calls = response.get("tool_calls", [])
-        else:
-            response_str = str(response)
-            tool_calls = []
+    try:
+        from pydantic_ai.messages import ModelRequest, ToolCallPart
+
+        response = await agent.run(
+            user_content,
+            message_history=conversation_history,
+        )
+
+        response_str = response.output
+        tool_calls = []
+        for msg in response.new_messages():
+            if isinstance(msg, ModelRequest):
+                for part in msg.parts:
+                    if isinstance(part, ToolCallPart):
+                        tool_calls.append({"tool": part.tool_name, "input": str(part.args), "output": None})
 
         # Add assistant response to history
         conversation_history.append({"role": "assistant", "content": response_str})

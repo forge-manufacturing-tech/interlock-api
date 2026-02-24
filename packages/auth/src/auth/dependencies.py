@@ -20,6 +20,18 @@ def _get_auth_repo() -> AuthRepository:
     return _auth_repo
 
 
+async def get_user_token(
+    request: Request,
+    credentials: HTTPAuthorizationCredentials | None = Depends(_bearer_scheme),
+) -> str | None:
+    api_key = request.headers.get("x-api-key")
+    if api_key:
+        return api_key
+    if credentials:
+        return credentials.credentials
+    return None
+
+
 async def get_current_user(
     request: Request,
     credentials: HTTPAuthorizationCredentials | None = Depends(_bearer_scheme),
