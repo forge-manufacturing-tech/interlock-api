@@ -48,6 +48,7 @@ from pydantic_ai.messages import (
 )
 from pydantic_ai.models.openai import OpenAIChatModel
 from pydantic_ai.providers.openai import OpenAIProvider
+from pydantic_ai.toolsets.function import FunctionToolset
 
 # ═══════════════════════════════════════════════════════════════════════
 #  Tool Definitions
@@ -392,12 +393,18 @@ def validate_part_tree(part_id: str) -> dict[str, Any]:
 
 SYSTEM_PROMPT = """\
 You are a manufacturing assistant with access to a parts database.
-You are a vision-capable agent and can see images and PDF pages uploaded by the user. Use these visuals to identify parts, understand assemblies, and extract technical details.
+You are a vision-capable agent and can see images and PDF pages uploaded by the user.
 
-You have ONE tool: `python_interpreter`. You MUST use it to interact with the manufacturing system.
-Instead of calling multiple tools sequentially, you should write a single Python script that performs all necessary steps efficiently.
+## TOOL USE — NON-NEGOTIABLE RULES
 
-Available functions within the `python_interpreter` (all return dicts or lists of dicts):
+1. You have EXACTLY ONE tool: `run_python`. Every action MUST go through it.
+2. NEVER output text or apologies before calling the tool. Your first action MUST be a tool call.
+3. Inside the code you pass to `run_python`, call functions DIRECTLY by name: `search_parts(...)`, NOT `default_api.search_parts(...)` or any other prefix.
+4. Do NOT try to call `search_parts`, `get_part_tree`, or any other function as a top-level tool — they are only available INSIDE `run_python` code.
+5. Only after the tool returns results should you summarise findings in plain text.
+
+## Functions available inside `run_python` code
+
 - search_parts(query: str, limit: int = 20) -> list[dict]
 - get_part_details(part_id: str) -> dict
 - get_part_tree(part_id: str) -> dict
@@ -414,25 +421,64 @@ Available functions within the `python_interpreter` (all return dicts or lists o
 - remove_part(part_id: str) -> dict
 - validate_part_tree(part_id: str) -> dict
 
-Rules for creating new parts:
+## Workflow for creating parts
+
 1. Search/list what's already in the database first.
 2. Purchase raw materials and machines (as parts), then register machines as tools.
 3. Create labor types as needed.
-4. Assemble parts together - every assembly needs at least one labor OR tool.
+4. Assemble parts — every assembly needs at least one labor OR tool.
 5. Validate the final tree.
 
-Efficient Workflow Example:
-If asked to create a part from scratch, your Python script should perform all steps at once and use `print()` to report progress:
-1. Check for existing components using `search_parts()`.
-2. Purchase missing ones using `purchase_raw_material()`.
-3. Define necessary labor/tools using `create_labor_type()` and `create_machine_tool()`.
-4. Assemble the final part using `assemble_part()`.
-5. Validate the final tree using `validate_part_tree()`.
+Write a single Python script that does ALL steps at once and uses `print()` to report progress.
+Always use IDs returned by the functions. Provide clear, concise answers with part IDs and summaries.
 
-CRITICAL: Call all functions directly (e.g., `search_parts(...)`). Do NOT prefix them with modules (e.g., NOT `default_api.search_parts(...)`).
-
-Always use IDs returned by the functions. Provide clear, direct answers with part IDs and summaries.
+CRITICAL REMINDER: You MUST NOT attempt to call `get_part_tree`, `search_parts`, or any other function as a direct tool call. The ONLY valid tool call is `run_python(code=...)`. Put your python code inside that tool.
 """
+
+# ═══════════════════════════════════════════════════════════════════════
+#  Manufacturing FunctionToolset
+#  (mirrors the future CodeModeToolset pattern — swap one line when it ships)
+# ═══════════════════════════════════════════════════════════════════════
+
+_mfg_toolset: FunctionToolset[None] = FunctionToolset()
+
+
+def _build_mfg_toolset() -> FunctionToolset[None]:
+    """Register all manufacturing helper functions on a FunctionToolset.
+
+    These functions are NOT exposed as direct agent tools.  They are the
+    vocabulary available inside `run_python` code, exactly as they will be
+    when CodeModeToolset ships and wraps this toolset automatically.
+    """
+    toolset: FunctionToolset[None] = FunctionToolset()
+
+    # Register every helper as a plain tool (no RunContext needed)
+    for fn in [
+        search_parts,
+        get_part_details,
+        get_part_tree,
+        get_part_ancestors,
+        get_part_costs,
+        get_part_timeline,
+        list_all_labor,
+        list_all_tools,
+        purchase_raw_material,
+        assemble_part,
+        create_labor_type,
+        create_machine_tool,
+        modify_part,
+        remove_part,
+        validate_part_tree,
+    ]:
+        toolset.add_function(fn, takes_ctx=False)
+
+    return toolset
+
+
+def _toolset_funcs() -> dict[str, Any]:
+    """Return the dict of callables to inject into the Monty sandbox."""
+    return {name: tool.function for name, tool in _mfg_toolset.tools.items()}
+
 
 # ═══════════════════════════════════════════════════════════════════════
 #  PydanticAI Agent
@@ -445,7 +491,7 @@ def _build_model() -> OpenAIChatModel:
         base_url=os.environ.get("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1"),
         api_key=os.environ.get("OPENROUTER_API_KEY", ""),
     )
-    return OpenAIChatModel("google/gemini-2.0-flash-001", provider=provider)
+    return OpenAIChatModel("openai/gpt-oss-safeguard-20b", provider=provider)
 
 
 # Single shared agent instance (created lazily to allow env vars to be set first)
@@ -453,73 +499,56 @@ _agent: Agent[Any, str] | None = None
 
 
 def _get_agent() -> Agent[Any, str]:
-    global _agent
+    global _agent, _mfg_toolset
     if _agent is None:
+        _mfg_toolset = _build_mfg_toolset()
         _agent = Agent(
             _build_model(),
             system_prompt=SYSTEM_PROMPT,
+            # Force tool execution even if the model outputs text alongside the tool request
+            end_strategy="exhaustive",
+            # Allow the model up to 3 retries if it calls a non-existent tool
+            retries=3,
+            # Allow the model up to 3 retries if it outputs plain text instead of a tool call
+            output_retries=3,
         )
-        _register_tools(_agent)
+        _register_code_runner(_agent)
     return _agent
 
 
-def _register_tools(agent: Agent[Any, str]) -> None:
-    """Attach all tools to the agent using @agent.tool_plain decorators."""
+def _register_code_runner(agent: Agent[Any, str]) -> None:
+    """Attach the single `run_python` tool to the agent.
+
+    This is the code-mode pattern: one tool that accepts Python code and
+    executes it in a Monty sandbox with the manufacturing functions injected.
+    When pydantic-ai ships CodeModeToolset, this whole function can be
+    replaced with: toolsets=[CodeModeToolset(_mfg_toolset)]
+    """
 
     @agent.tool_plain
-    def python_interpreter(code: str) -> str:
-        """Execute Python code in a secure sandbox.
-        Use this to perform complex manufacturing tasks by calling available functions.
+    def run_python(code: str) -> str:
+        """Execute Python code in a secure Monty sandbox.
 
-        The environment has access to:
-        - search_parts(query: str, limit: int = 20) -> list[dict]
-        - get_part_details(part_id: str) -> dict
-        - get_part_tree(part_id: str) -> dict
-        - get_part_ancestors(part_id: str) -> list[dict]
-        - get_part_costs(part_id: str) -> list[dict]
-        - get_part_timeline(part_id: str) -> list[dict]
-        - list_all_labor() -> list[dict]
-        - list_all_tools() -> list[dict]
-        - purchase_raw_material(name, cost, currency="USD", description=None, unit_of_measure="each") -> dict
-        - assemble_part(name, input_part_ids, quantities=None, ...) -> dict
-        - create_labor_type(name, hourly_rate, description=None, skill_level=None) -> dict
-        - create_machine_tool(name, linked_part_id, cost_rate, rate_unit="hour", ...) -> dict
-        - modify_part(part_id, new_name=None, new_description=None) -> dict
-        - remove_part(part_id: str) -> dict
-        - validate_part_tree(part_id: str) -> dict
+        This is the ONLY tool available. Write Python that calls the
+        manufacturing functions directly (no module prefix) and use
+        print() to emit intermediate results.
+
+        Available functions: search_parts, get_part_details, get_part_tree,
+        get_part_ancestors, get_part_costs, get_part_timeline, list_all_labor,
+        list_all_tools, purchase_raw_material, assemble_part,
+        create_labor_type, create_machine_tool, modify_part, remove_part,
+        validate_part_tree.
 
         Example:
-        ```python
-        steel = purchase_raw_material("Steel Plate", 50.0)
-        steel_id = steel['id']
-        print(f"Created steel: {steel_id}")
-        ```
-        Note: Use `print()` to see intermediate results. The interpreter also returns the value of the last expression.
-        CRITICAL: Do NOT prefix function calls with `default_api.` or any other module name. Call them directly.
+            parts = search_parts("steel")
+            print(parts)
         """
+        from typing import Literal
+
         import pydantic_monty
 
-        funcs = {
-            "search_parts": search_parts,
-            "get_part_details": get_part_details,
-            "get_part_tree": get_part_tree,
-            "get_part_ancestors": get_part_ancestors,
-            "get_part_costs": get_part_costs,
-            "get_part_timeline": get_part_timeline,
-            "list_all_labor": list_all_labor,
-            "list_all_tools": list_all_tools,
-            "purchase_raw_material": purchase_raw_material,
-            "assemble_part": assemble_part,
-            "create_labor_type": create_labor_type,
-            "create_machine_tool": create_machine_tool,
-            "modify_part": modify_part,
-            "remove_part": remove_part,
-            "validate_part_tree": validate_part_tree,
-        }
-
+        funcs = _toolset_funcs()
         printed_lines: list[str] = []
-
-        from typing import Literal
 
         def capture_print(kind: Literal["stdout"], text: str) -> None:
             printed_lines.append(text)
@@ -538,14 +567,11 @@ def _register_tools(agent: Agent[Any, str]) -> None:
             if printed_lines:
                 result_parts.append("\n".join(printed_lines))
             if output is not None:
-                result_parts.append(f"Return Value: {output}")
+                result_parts.append(f"Return value: {output}")
 
-            if not result_parts:
-                return "Code executed successfully (no output)."
-
-            return "\n".join(result_parts)
+            return "\n".join(result_parts) if result_parts else "Code executed (no output)."
         except Exception as e:
-            return f"Error executing code: {e}"
+            return f"Error: {e}"
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -571,10 +597,20 @@ def _history_to_model_messages(history: list[dict[str, Any]]) -> list[ModelMessa
                     text_parts.append(block)
             content = "\n".join(text_parts)
 
+        if not isinstance(content, str):
+            content = str(content)
+
         if role == "user":
             messages.append(ModelRequest(parts=[UserPromptPart(content=content)]))
-        elif role == "assistant":
-            messages.append(ModelResponse(parts=[TextPart(content=content)]))
+        elif role == "assistant" and content:
+            # model_name is optional in PydanticAI >= 0.x — provide a placeholder
+            # so history reconstruction never silently fails on construction
+            messages.append(
+                ModelResponse(
+                    parts=[TextPart(content=content)],
+                    model_name="unknown",
+                )
+            )
     return messages
 
 
@@ -698,7 +734,7 @@ async def stream_tech_transfer_agent(question: Any, history: list[dict[str, Any]
         for part in msg.parts:
             if isinstance(part, ToolCallPart):
                 args_str = part.args_as_json_str() if hasattr(part, "args_as_json_str") else str(part.args)
-                if part.tool_name == "python_interpreter":
+                if part.tool_name == "run_python":
                     try:
                         import json as _json
 
