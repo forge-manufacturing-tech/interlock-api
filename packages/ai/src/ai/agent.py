@@ -44,145 +44,97 @@ from orm.main import (
 #  Tool Definitions
 # ═══════════════════════════════════════════════════════════════════════
 
-# ── Read / Query Tools ────────────────────────────────────────────────
+# ── Read / Query Functions ────────────────────────────────────────────
 
 
-@tool
-def search_parts(query: str, limit: int = 20) -> str:
-    """Search for parts by listing them. Returns IDs and names.
-    Use this to find existing parts in the database.
+def search_parts(query: str, limit: int = 20) -> list[dict[str, Any]]:
+    """Search for parts by listing them. Returns a list of dicts with ID and name.
     Args:
         query: Not used for filtering yet, but describes what you're looking for.
         limit: Max number of parts to return.
     """
-    try:
-        parts = list_parts(limit=limit)
-        if not parts:
-            return "No parts found in the database."
-        lines = [f"• {p.name} (ID: {p.id})" for p in parts]
-        return "Found parts:\n" + "\n".join(lines)
-    except Exception as e:
-        return f"Error searching parts: {e}"
+    parts = list_parts(limit=limit)
+    return [{"id": str(p.id), "name": p.name} for p in parts]
 
 
-@tool
-def get_part_details(part_id: str) -> str:
+def get_part_details(part_id: str) -> dict[str, Any]:
     """Get full details of a specific part by its UUID string.
     Args:
         part_id: UUID string of the part to look up.
     """
-    try:
-        part = get_part(UUID(part_id))
-        if not part:
-            return f"Part {part_id} not found."
-        creator = get_created_by(UUID(part_id))
-        creator_info = ""
-        if creator:
-            creator_info = f"\nCreated by operation: {creator.name} (Type: {creator.op_type}, ID: {creator.id})"
-        return f"Part: {part.name}\nID: {part.id}\nDescription: {part.description}{creator_info}"
-    except Exception as e:
-        return f"Error: {e}"
+    part = get_part(UUID(part_id))
+    if not part:
+        return {"error": f"Part {part_id} not found."}
+    creator = get_created_by(UUID(part_id))
+    creator_info = {}
+    if creator:
+        creator_info = {"created_by_op_id": str(creator.id), "op_name": creator.name, "op_type": str(creator.op_type)}
+    return {
+        "id": str(part.id),
+        "name": part.name,
+        "description": part.description,
+        "unit_of_measure": part.unit_of_measure,
+        **creator_info,
+    }
 
 
-@tool
-def get_part_tree(part_id: str) -> str:
-    """Get the full manufacturing tree for a part, showing all ancestors
-    and how it was built.
+def get_part_tree(part_id: str) -> dict[str, Any]:
+    """Get the full manufacturing tree for a part.
     Args:
         part_id: UUID string of the part.
     """
-    try:
-        tree = get_tree_json(UUID(part_id))
-        return f"Manufacturing tree:\n{tree}"
-    except Exception as e:
-        return f"Error: {e}"
+    return get_tree_json(UUID(part_id))
 
 
-@tool
-def get_part_ancestors(part_id: str) -> str:
+def get_part_ancestors(part_id: str) -> list[dict[str, Any]]:
     """Get all upstream ancestor parts that feed into this part.
     Args:
         part_id: UUID string of the part.
     """
-    try:
-        ancestors = get_ancestors(UUID(part_id))
-        if not ancestors:
-            return "No ancestors found (this may be a raw material)."
-        lines = [f"• {a.name} (ID: {a.id})" for a in ancestors]
-        return "Ancestor parts:\n" + "\n".join(lines)
-    except Exception as e:
-        return f"Error: {e}"
+    ancestors = get_ancestors(UUID(part_id))
+    return [{"id": str(a.id), "name": a.name} for a in ancestors]
 
 
-@tool
-def get_part_costs(part_id: str) -> str:
+def get_part_costs(part_id: str) -> list[dict[str, Any]]:
     """Get all leaf currency nodes (raw costs) upstream of a part.
     Args:
         part_id: UUID string of the part.
     """
-    try:
-        currencies = get_leaf_currencies(UUID(part_id))
-        if not currencies:
-            return "No cost information found."
-        lines = [f"• {c.name}: {c.iso_code} (ID: {c.id})" for c in currencies]
-        return "Cost breakdown:\n" + "\n".join(lines)
-    except Exception as e:
-        return f"Error: {e}"
+    currencies = get_leaf_currencies(UUID(part_id))
+    return [{"id": str(c.id), "name": c.name, "iso_code": c.iso_code} for c in currencies]
 
 
-@tool
-def get_part_timeline(part_id: str) -> str:
+def get_part_timeline(part_id: str) -> list[dict[str, Any]]:
     """Get the full manufacturing timeline for a part.
     Args:
         part_id: UUID string of the part.
     """
-    try:
-        timeline = get_full_timeline(UUID(part_id))
-        if not timeline:
-            return "No timeline data."
-        lines = [f"• {n.name} (ID: {n.id})" for n in timeline]
-        return "Timeline:\n" + "\n".join(lines)
-    except Exception as e:
-        return f"Error: {e}"
+    timeline = get_full_timeline(UUID(part_id))
+    return [{"id": str(n.id), "name": n.name, "type": type(n).__name__} for n in timeline]
 
 
-@tool
-def list_all_labor() -> str:
+def list_all_labor() -> list[dict[str, Any]]:
     """List all labor types available in the system."""
-    try:
-        labor_list = list_labor()
-        if not labor_list:
-            return "No labor types defined."
-        lines = [f"• {lb.name} – ${lb.hourly_rate}/hr (ID: {lb.id})" for lb in labor_list]
-        return "Labor types:\n" + "\n".join(lines)
-    except Exception as e:
-        return f"Error: {e}"
+    labor_list = list_labor()
+    return [{"id": str(lb.id), "name": lb.name, "hourly_rate": lb.hourly_rate} for lb in labor_list]
 
 
-@tool
-def list_all_tools() -> str:
+def list_all_tools() -> list[dict[str, Any]]:
     """List all tools/machines available in the system."""
-    try:
-        tool_list = list_tools()
-        if not tool_list:
-            return "No tools defined."
-        lines = [f"• {t.name} – ${t.cost_rate}/{t.rate_unit} (ID: {t.id}, linked part: {t.linked_part_id})" for t in tool_list]
-        return "Tools:\n" + "\n".join(lines)
-    except Exception as e:
-        return f"Error: {e}"
+    tool_list = list_tools()
+    return [{"id": str(t.id), "name": t.name, "cost_rate": t.cost_rate, "rate_unit": t.rate_unit, "linked_part_id": str(t.linked_part_id)} for t in tool_list]
 
 
-# ── Write / Mutation Tools ────────────────────────────────────────────
+# ── Write / Mutation Functions ────────────────────────────────────────
 
 
-@tool
 def purchase_raw_material(
     name: str,
     cost: float,
     currency: str = "USD",
     description: str | None = None,
     unit_of_measure: str = "each",
-) -> str:
+) -> dict[str, Any]:
     """Purchase a new raw material or component. Creates a purchased part
     with an associated Purchase operation and cost.
     Args:
@@ -193,29 +145,32 @@ def purchase_raw_material(
         unit_of_measure: What is one unit? e.g. "each", "kg", "meter",
             "liter", "sheet" (default "each")
     """
-    try:
-        part_id = uuid4()
-        part = PartNode(
-            id=part_id,
-            name=name,
-            description=description or f"Purchased {name}",
-            unit_of_measure=unit_of_measure,
-        )
-        op_id = uuid4()
-        op = OperationNode(
-            id=op_id,
-            name=f"Purchase {name}",
-            description=f"Purchase transaction for {name}",
-            op_type=OpType.PURCHASE,
-        )
-        cost_obj = CurrencyAmount(amount=cost, currency_code=currency)
-        result = purchase_part(part, op, [cost_obj])
-        return f"✅ Purchased '{result.name}'\n   Part ID: {result.id}\n   Cost: {cost} {currency}\n   Unit: {unit_of_measure}"
-    except Exception as e:
-        return f"❌ Error purchasing {name}: {e}"
+    part_id = uuid4()
+    part = PartNode(
+        id=part_id,
+        name=name,
+        description=description or f"Purchased {name}",
+        unit_of_measure=unit_of_measure,
+    )
+    op_id = uuid4()
+    op = OperationNode(
+        id=op_id,
+        name=f"Purchase {name}",
+        description=f"Purchase transaction for {name}",
+        op_type=OpType.PURCHASE,
+    )
+    cost_obj = CurrencyAmount(amount=cost, currency_code=currency)
+    result = purchase_part(part, op, [cost_obj])
+    return {
+        "id": str(result.id),
+        "name": result.name,
+        "cost": cost,
+        "currency": currency,
+        "unit_of_measure": unit_of_measure,
+        "status": "success",
+    }
 
 
-@tool
 def assemble_part(
     name: str,
     input_part_ids: list[str],
@@ -231,12 +186,11 @@ def assemble_part(
     tool_ids: list[str] | None = None,
     tool_quantities: list[float] | None = None,
     tool_units: list[str] | None = None,
-) -> str:
+) -> dict[str, Any]:
     """Assemble/manufacture a new part from existing input parts, with
     labor and tool usage.
 
-    IMPORTANT: All input parts must already exist. Use search_parts or
-    purchase_raw_material first. At least one labor or tool is REQUIRED.
+    IMPORTANT: All input parts must already exist. At least one labor or tool is REQUIRED.
 
     Args:
         name: Name of the new assembled part
@@ -247,100 +201,102 @@ def assemble_part(
         yield_rate: Fraction of good output, 0.95 = 5% scrap (default 1.0)
         setup_time_minutes: Fixed setup time before production (default 0)
         estimated_duration_minutes: Run time per unit produced (default 0)
-        labor_ids: List of UUID strings for labor types used (REQUIRED
-            unless tool_ids provided)
+        labor_ids: List of UUID strings for labor types used
         labor_quantities: Quantities for each labor input (hours)
         labor_units: Units for each labor quantity (default "hours")
-        tool_ids: List of UUID strings for tools used (REQUIRED unless
-            labor_ids provided)
+        tool_ids: List of UUID strings for tools used
         tool_quantities: Quantities for each tool input (hours)
         tool_units: Units for each tool quantity (default "hours")
     """
-    try:
-        if not input_part_ids:
-            return "❌ Error: At least one input part is required."
+    if not input_part_ids:
+        raise ValueError("At least one input part is required.")
 
-        if not (labor_ids or tool_ids):
-            return "❌ Error: At least one labor or tool is required. Parts don't assemble themselves."
+    if not (labor_ids or tool_ids):
+        raise ValueError("At least one labor or tool is required. Parts don't assemble themselves.")
 
-        if quantities and len(quantities) != len(input_part_ids):
-            return "❌ Error: quantities length must match input_part_ids."
+    if quantities and len(quantities) != len(input_part_ids):
+        raise ValueError("quantities length must match input_part_ids.")
 
-        part_inputs = []
-        for i, pid in enumerate(input_part_ids):
-            qty = quantities[i] if quantities else 1.0
-            part_inputs.append(QuantityInput(resource_id=UUID(pid), quantity=qty, unit="each"))
+    part_inputs = []
+    for i, pid in enumerate(input_part_ids):
+        qty = quantities[i] if quantities else 1.0
+        part_inputs.append(QuantityInput(resource_id=UUID(pid), quantity=qty, unit="each"))
 
-        labor_inputs: list[QuantityInput] = []
-        if labor_ids:
-            for i, lid in enumerate(labor_ids):
-                qty = labor_quantities[i] if labor_quantities else 1.0
-                unit = labor_units[i] if labor_units else "hours"
-                labor_inputs.append(QuantityInput(resource_id=UUID(lid), quantity=qty, unit=unit))
+    labor_inputs: list[QuantityInput] = []
+    if labor_ids:
+        for i, lid in enumerate(labor_ids):
+            qty = labor_quantities[i] if labor_quantities else 1.0
+            unit = labor_units[i] if labor_units else "hours"
+            labor_inputs.append(QuantityInput(resource_id=UUID(lid), quantity=qty, unit=unit))
 
-        tool_inputs: list[QuantityInput] = []
-        if tool_ids:
-            for i, tid in enumerate(tool_ids):
-                qty = tool_quantities[i] if tool_quantities else 1.0
-                unit = tool_units[i] if tool_units else "hours"
-                tool_inputs.append(QuantityInput(resource_id=UUID(tid), quantity=qty, unit=unit))
+    tool_inputs: list[QuantityInput] = []
+    if tool_ids:
+        for i, tid in enumerate(tool_ids):
+            qty = tool_quantities[i] if tool_quantities else 1.0
+            unit = tool_units[i] if tool_units else "hours"
+            tool_inputs.append(QuantityInput(resource_id=UUID(tid), quantity=qty, unit=unit))
 
-        part_id = uuid4()
-        part = PartNode(
-            id=part_id,
-            name=name,
-            description=description or f"Assembled {name}",
-        )
-        op_id = uuid4()
-        op = OperationNode(
-            id=op_id,
-            name=f"Assemble {name}",
-            description=f"Assembly/manufacturing operation for {name}",
-            op_type=OpType.STANDARD,
-            instructions=instructions,
-            yield_rate=yield_rate,
-            setup_time_minutes=setup_time_minutes,
-            estimated_duration_minutes=estimated_duration_minutes,
-        )
+    part_id = uuid4()
+    part = PartNode(
+        id=part_id,
+        name=name,
+        description=description or f"Assembled {name}",
+    )
+    op_id = uuid4()
+    op = OperationNode(
+        id=op_id,
+        name=f"Assemble {name}",
+        description=f"Assembly/manufacturing operation for {name}",
+        op_type=OpType.STANDARD,
+        instructions=instructions,
+        yield_rate=yield_rate,
+        setup_time_minutes=setup_time_minutes,
+        estimated_duration_minutes=estimated_duration_minutes,
+    )
 
-        result = manufacture_part(part, op, part_inputs, labor_inputs, tool_inputs)
-        return f"✅ Assembled '{result.name}'\n   Part ID: {result.id}\n   Inputs: {len(part_inputs)} parts, {len(labor_inputs)} labor, {len(tool_inputs)} tools\n   Yield: {yield_rate * 100:.0f}%"
-    except Exception as e:
-        return f"❌ Error assembling {name}: {e}"
+    result = manufacture_part(part, op, part_inputs, labor_inputs, tool_inputs)
+    return {
+        "id": str(result.id),
+        "name": result.name,
+        "input_count": len(part_inputs),
+        "labor_count": len(labor_inputs),
+        "tool_count": len(tool_inputs),
+        "yield_rate": yield_rate,
+        "status": "success",
+    }
 
 
-@tool
 def create_labor_type(
     name: str,
     hourly_rate: float,
     description: str | None = None,
     skill_level: str | None = None,
-) -> str:
+) -> dict[str, Any]:
     """Create a new type of labor (e.g. "Welding", "CNC Operation").
     Args:
         name: Name of the labor type
         hourly_rate: Cost per hour
         description: Optional description
         skill_level: Required skill or certification
-            (e.g. "AWS D1.1 Certified", "Level 3 Machinist")
     """
-    try:
-        labor_id = uuid4()
-        labor = LaborNode(
-            id=labor_id,
-            name=name,
-            hourly_rate=hourly_rate,
-            description=description or f"{name} labor",
-            skill_level=skill_level,
-        )
-        result = create_labor(labor)
-        skill_info = f"\n   Skill: {result.skill_level}" if result.skill_level else ""
-        return f"✅ Created labor '{result.name}'\n   ID: {result.id}\n   Rate: ${result.hourly_rate}/hr{skill_info}"
-    except Exception as e:
-        return f"❌ Error creating labor: {e}"
+    labor_id = uuid4()
+    labor = LaborNode(
+        id=labor_id,
+        name=name,
+        hourly_rate=hourly_rate,
+        description=description or f"{name} labor",
+        skill_level=skill_level,
+    )
+    result = create_labor(labor)
+    return {
+        "id": str(result.id),
+        "name": result.name,
+        "hourly_rate": result.hourly_rate,
+        "skill_level": result.skill_level,
+        "status": "success",
+    }
 
 
-@tool
 def create_machine_tool(
     name: str,
     linked_part_id: str,
@@ -348,9 +304,9 @@ def create_machine_tool(
     rate_unit: str = "hour",
     setup_time_minutes: float = 0.0,
     description: str | None = None,
-) -> str:
+) -> dict[str, Any]:
     """Create a tool/machine entry. The machine itself must already exist
-    as a purchased part (use purchase_raw_material first for the machine).
+    as a purchased part.
     Args:
         name: Name of the tool/machine
         linked_part_id: UUID string of the part representing this machine
@@ -359,79 +315,153 @@ def create_machine_tool(
         setup_time_minutes: Fixed setup time in minutes (default 0)
         description: Optional description
     """
-    try:
-        tool_id = uuid4()
-        t = MfgToolNode(
-            id=tool_id,
-            name=name,
-            linked_part_id=UUID(linked_part_id),
-            cost_rate=cost_rate,
-            rate_unit=rate_unit,
-            setup_time_minutes=setup_time_minutes,
-            description=description or f"{name} machine/tool",
-        )
-        result = create_tool(t)
-        return f"✅ Created tool '{result.name}'\n   ID: {result.id}\n   Rate: ${result.cost_rate}/{result.rate_unit}\n   Setup: {result.setup_time_minutes} min"
-    except Exception as e:
-        return f"❌ Error creating tool: {e}"
+    tool_id = uuid4()
+    t = MfgToolNode(
+        id=tool_id,
+        name=name,
+        linked_part_id=UUID(linked_part_id),
+        cost_rate=cost_rate,
+        rate_unit=rate_unit,
+        setup_time_minutes=setup_time_minutes,
+        description=description or f"{name} machine/tool",
+    )
+    result = create_tool(t)
+    return {
+        "id": str(result.id),
+        "name": result.name,
+        "cost_rate": result.cost_rate,
+        "rate_unit": result.rate_unit,
+        "status": "success",
+    }
 
 
-@tool
 def modify_part(
     part_id: str,
     new_name: str | None = None,
     new_description: str | None = None,
-) -> str:
+) -> dict[str, Any]:
     """Modify an existing part's name or description.
     Args:
         part_id: UUID string of the part to modify
         new_name: New name (or None to keep current)
         new_description: New description (or None to keep current)
     """
-    try:
-        part = get_part(UUID(part_id))
-        if not part:
-            return f"❌ Part {part_id} not found."
+    part = get_part(UUID(part_id))
+    if not part:
+        return {"error": f"Part {part_id} not found."}
 
-        if new_name is not None:
-            part.name = new_name
-        if new_description is not None:
-            part.description = new_description
+    if new_name is not None:
+        part.name = new_name
+    if new_description is not None:
+        part.description = new_description
 
-        result = update_part(part)
-        return f"✅ Updated part '{result.name}'\n   ID: {result.id}"
-    except Exception as e:
-        return f"❌ Error modifying part: {e}"
+    result = update_part(part)
+    return {"id": str(result.id), "name": result.name, "status": "success"}
 
 
-@tool
-def remove_part(part_id: str) -> str:
+def remove_part(part_id: str) -> dict[str, Any]:
     """Delete a part from the database.
     Args:
         part_id: UUID string of the part to delete.
     """
-    try:
-        success = delete_part(UUID(part_id))
-        if success:
-            return f"✅ Deleted part {part_id}"
-        return f"❌ Could not delete part {part_id}"
-    except Exception as e:
-        return f"❌ Error: {e}"
+    success = delete_part(UUID(part_id))
+    return {"id": part_id, "success": success}
 
 
-@tool
-def validate_part_tree(part_id: str) -> str:
+def validate_part_tree(part_id: str) -> dict[str, Any]:
     """Validate the manufacturing tree starting from a root part.
-    Checks structural integrity.
     Args:
         part_id: UUID string of the root part.
     """
+    result = validate_tree(UUID(part_id))
+    return asdict(result)
+
+
+# ── Python Interpreter Tool ───────────────────────────────────────────
+
+
+@tool
+def python_interpreter(code: str) -> str:
+    """Execute Python code in a secure sandbox.
+    Use this to perform complex manufacturing tasks by calling available functions.
+
+    The environment has access to:
+    - search_parts(query: str, limit: int = 20) -> list[dict]
+    - get_part_details(part_id: str) -> dict
+    - get_part_tree(part_id: str) -> dict
+    - get_part_ancestors(part_id: str) -> list[dict]
+    - get_part_costs(part_id: str) -> list[dict]
+    - get_part_timeline(part_id: str) -> list[dict]
+    - list_all_labor() -> list[dict]
+    - list_all_tools() -> list[dict]
+    - purchase_raw_material(name, cost, currency="USD", description=None, unit_of_measure="each") -> dict
+    - assemble_part(name, input_part_ids, quantities=None, ...) -> dict
+    - create_labor_type(name, hourly_rate, description=None, skill_level=None) -> dict
+    - create_machine_tool(name, linked_part_id, cost_rate, rate_unit="hour", ...) -> dict
+    - modify_part(part_id, new_name=None, new_description=None) -> dict
+    - remove_part(part_id: str) -> dict
+    - validate_part_tree(part_id: str) -> dict
+
+    Example:
+    ```python
+    steel = purchase_raw_material("Steel Plate", 50.0)
+    steel_id = steel['id']
+    print(f"Created steel: {steel_id}")
+    ```
+    Note: Use `print()` to see intermediate results. The interpreter also returns the value of the last expression.
+    CRITICAL: Do NOT prefix function calls with `default_api.` or any other module name. Call them directly.
+    """
+    import pydantic_monty
+
+    # Map functions for Monty
+    funcs = {
+        "search_parts": search_parts,
+        "get_part_details": get_part_details,
+        "get_part_tree": get_part_tree,
+        "get_part_ancestors": get_part_ancestors,
+        "get_part_costs": get_part_costs,
+        "get_part_timeline": get_part_timeline,
+        "list_all_labor": list_all_labor,
+        "list_all_tools": list_all_tools,
+        "purchase_raw_material": purchase_raw_material,
+        "assemble_part": assemble_part,
+        "create_labor_type": create_labor_type,
+        "create_machine_tool": create_machine_tool,
+        "modify_part": modify_part,
+        "remove_part": remove_part,
+        "validate_part_tree": validate_part_tree,
+    }
+
+    printed_lines = []
+
+    from typing import Literal
+
+    def capture_print(kind: Literal["stdout"], text: str):
+        printed_lines.append(text)
+
     try:
-        result = validate_tree(UUID(part_id))
-        d = asdict(result)
-        return f"Validation result:\n{d}"
+        m = pydantic_monty.Monty(
+            code,
+            external_functions=list(funcs.keys()),
+        )
+        output = m.run(
+            external_functions=funcs,
+            print_callback=capture_print,
+        )
+
+        # Combine printed output and the return value
+        result_parts = []
+        if printed_lines:
+            result_parts.append("\n".join(printed_lines))
+        if output is not None:
+            result_parts.append(f"Return Value: {output}")
+
+        if not result_parts:
+            return "Code executed successfully (no output)."
+
+        return "\n".join(result_parts)
     except Exception as e:
-        return f"Error validating: {e}"
+        return f"Error executing code: {e}"
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -439,21 +469,7 @@ def validate_part_tree(part_id: str) -> str:
 # ═══════════════════════════════════════════════════════════════════════
 
 ALL_TOOLS = [
-    search_parts,
-    get_part_details,
-    get_part_tree,
-    get_part_ancestors,
-    get_part_costs,
-    get_part_timeline,
-    list_all_labor,
-    list_all_tools,
-    purchase_raw_material,
-    assemble_part,
-    create_labor_type,
-    create_machine_tool,
-    modify_part,
-    remove_part,
-    validate_part_tree,
+    python_interpreter,
 ]
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -464,21 +480,44 @@ SYSTEM_PROMPT = """\
 You are a manufacturing assistant with access to a parts database.
 You are a vision-capable agent and can see images and PDF pages uploaded by the user. Use these visuals to identify parts, understand assemblies, and extract technical details.
 
-You have tools to:
-- search_parts, get_part_details, get_part_tree, get_part_ancestors, get_part_costs, get_part_timeline
-- list_all_labor, list_all_tools
-- purchase_raw_material, assemble_part, create_labor_type, create_machine_tool
-- modify_part, remove_part, validate_part_tree
+You have ONE tool: `python_interpreter`. You MUST use it to interact with the manufacturing system.
+Instead of calling multiple tools sequentially, you should write a single Python script that performs all necessary steps efficiently.
 
-Use the tools to fulfill the user's request. Always use IDs returned by tool calls. \
-When creating new parts:
-1. Search/list what's already in the database first
-2. Purchase raw materials and machines (as parts), then register machines as tools
-3. Create labor types as needed
-4. Assemble parts together - every assembly needs at least one labor OR tool
-5. Validate the final tree
+Available functions within the `python_interpreter` (all return dicts or lists of dicts):
+- search_parts(query: str, limit: int = 20) -> list[dict]
+- get_part_details(part_id: str) -> dict
+- get_part_tree(part_id: str) -> dict
+- get_part_ancestors(part_id: str) -> list[dict]
+- get_part_costs(part_id: str) -> list[dict]
+- get_part_timeline(part_id: str) -> list[dict]
+- list_all_labor() -> list[dict]
+- list_all_tools() -> list[dict]
+- purchase_raw_material(name, cost, currency="USD", description=None, unit_of_measure="each") -> dict
+- assemble_part(name, input_part_ids, quantities=None, description=None, instructions=None, yield_rate=1.0, setup_time_minutes=0.0, estimated_duration_minutes=0.0, labor_ids=None, labor_quantities=None, labor_units=None, tool_ids=None, tool_quantities=None, tool_units=None) -> dict
+- create_labor_type(name, hourly_rate, description=None, skill_level=None) -> dict
+- create_machine_tool(name, linked_part_id, cost_rate, rate_unit="hour", setup_time_minutes=0.0, description=None) -> dict
+- modify_part(part_id, new_name=None, new_description=None) -> dict
+- remove_part(part_id: str) -> dict
+- validate_part_tree(part_id: str) -> dict
 
-Provide clear, direct answers with part IDs and summaries.
+Rules for creating new parts:
+1. Search/list what's already in the database first.
+2. Purchase raw materials and machines (as parts), then register machines as tools.
+3. Create labor types as needed.
+4. Assemble parts together - every assembly needs at least one labor OR tool.
+5. Validate the final tree.
+
+Efficient Workflow Example:
+If asked to create a part from scratch, your Python script should perform all steps at once and use `print()` to report progress:
+1. Check for existing components using `search_parts()`.
+2. Purchase missing ones using `purchase_raw_material()`.
+3. Define necessary labor/tools using `create_labor_type()` and `create_machine_tool()`.
+4. Assemble the final part using `assemble_part()`.
+5. Validate the final tree using `validate_part_tree()`.
+
+CRITICAL: Call all functions directly (e.g., `search_parts(...)`). Do NOT prefix them with modules (e.g., NOT `default_api.search_parts(...)`).
+
+Always use IDs returned by the functions. Provide clear, direct answers with part IDs and summaries.
 """
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -487,18 +526,12 @@ Provide clear, direct answers with part IDs and summaries.
 
 
 def _get_strong_llm():
-    import os
 
-    from langchain_openai import ChatOpenAI
-    from pydantic import SecretStr
+    from langchain_openrouter import ChatOpenRouter
 
-    api_key = os.environ.get("OPENROUTER_API_KEY")
-
-    return ChatOpenAI(
-        model_name="google/gemini-2.0-flash-001",
+    return ChatOpenRouter(
+        model="google/gemini-2.0-flash-001",
         temperature=0.3,
-        openai_api_base="https://openrouter.ai/api/v1",
-        openai_api_key=SecretStr(api_key) if api_key else None,
     )
 
 
@@ -588,6 +621,13 @@ def get_tech_transfer_agent():
                 if has_tool_calls:
                     tool_names = [tc.get("name", "unknown") for tc in last_msg.tool_calls]
                     debug_info.append(f"  - Agent making tool calls: {tool_names}")
+
+                    # Specifically log the python_interpreter code for programmatic tool calling
+                    for tc in last_msg.tool_calls:
+                        if tc.get("name") == "python_interpreter":
+                            code = tc.get("args", {}).get("code", "")
+                            debug_info.append(f"  - python_interpreter code: {code[:100]}...")
+
                     # Let the agent continue - LangGraph should auto-execute tools
                     # Update messages and loop to let it continue
                     current_messages = list(messages)
@@ -761,11 +801,22 @@ async def stream_tech_transfer_agent(question: Any, history: list[dict[str, Any]
                 yield {"type": "content", "content": content}
 
         elif kind == "on_tool_start":
-            yield {
-                "type": "tool_start",
-                "tool": event["name"],
-                "input": str(event["data"].get("input", {})),
-            }
+            tool_name = event["name"]
+            tool_input = event["data"].get("input", {})
+
+            # Highlight python_interpreter code execution in streaming events
+            if tool_name == "python_interpreter" and isinstance(tool_input, dict) and "code" in tool_input:
+                yield {
+                    "type": "tool_start",
+                    "tool": tool_name,
+                    "input": tool_input["code"],
+                }
+            else:
+                yield {
+                    "type": "tool_start",
+                    "tool": tool_name,
+                    "input": str(tool_input),
+                }
 
         elif kind == "on_tool_end":
             output = event["data"].get("output")
