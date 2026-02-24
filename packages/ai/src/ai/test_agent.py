@@ -2,16 +2,12 @@ import asyncio
 
 from ai.agent import get_agent
 
-test_agent = get_agent()
+test_agent = get_agent(api_key="Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI5MjFkOWZlMC1jODQxLTQyZjQtYjc5Yy1mOTUzMzU2ZmE2NmIiLCJlbWFpbCI6Im5hdGhhbkBpbnRlcmxvY2stc3lzdGVtcy5pbyIsImV4cCI6MTc3MjA0OTI3M30._mPQVC8NwjENx-hobZ7Kt6eJGcsk6sr0qW9ksHSwWrk")
 
 
 async def main():
     result = await test_agent.run(
-        "Make a GET request to https://api.restful-api.dev/objects to fetch a list of objects. "
-        "The `http_get` function is available directly in your sandbox. "
-        "Note: The `json` module is NOT available, so you'll have to reason about the raw string "
-        "returned by the API (or use simple string methods to 'parse' it). "
-        "Describe one of the objects you find."
+        "Create a new part called 'Test Part' with unit of measure 'each' and description 'Test Part'",
     )
     print(result.output)
 
