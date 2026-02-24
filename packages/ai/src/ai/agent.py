@@ -409,6 +409,7 @@ def python_interpreter(code: str) -> str:
     print(f"Created steel: {steel_id}")
     ```
     Note: Use `print()` to see intermediate results. The interpreter also returns the value of the last expression.
+    CRITICAL: Do NOT prefix function calls with `default_api.` or any other module name. Call them directly.
     """
     import pydantic_monty
 
@@ -514,6 +515,8 @@ If asked to create a part from scratch, your Python script should perform all st
 4. Assemble the final part using `assemble_part()`.
 5. Validate the final tree using `validate_part_tree()`.
 
+CRITICAL: Call all functions directly (e.g., `search_parts(...)`). Do NOT prefix them with modules (e.g., NOT `default_api.search_parts(...)`).
+
 Always use IDs returned by the functions. Provide clear, direct answers with part IDs and summaries.
 """
 
@@ -523,18 +526,12 @@ Always use IDs returned by the functions. Provide clear, direct answers with par
 
 
 def _get_strong_llm():
-    import os
 
-    from langchain_openai import ChatOpenAI
-    from pydantic import SecretStr
+    from langchain_openrouter import ChatOpenRouter
 
-    api_key = os.environ.get("OPENROUTER_API_KEY")
-
-    return ChatOpenAI(
-        model_name="google/gemini-2.0-flash-001",
+    return ChatOpenRouter(
+        model="google/gemini-2.0-flash-001",
         temperature=0.3,
-        openai_api_base="https://openrouter.ai/api/v1",
-        openai_api_key=SecretStr(api_key) if api_key else None,
     )
 
 
