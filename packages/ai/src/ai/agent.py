@@ -47,7 +47,7 @@ def get_agent(api_key: str | None = None):
         base_url=os.environ.get("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1"),
         api_key=os.environ.get("OPENROUTER_API_KEY", ""),
     )
-    model = OpenAIChatModel("openai/gpt-oss-safeguard-20b", provider=provider)
+    model = OpenAIChatModel("nvidia/nemotron-3-nano-30b-a3b:free", provider=provider)
 
     agent = Agent(
         model,
