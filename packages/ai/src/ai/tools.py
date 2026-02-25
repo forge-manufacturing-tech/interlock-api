@@ -29,13 +29,19 @@ def http_delete(url: str, headers: dict | None = None) -> str:
         return client.delete(url, headers=headers).text
 
 
+def http_patch(url: str, json_data: dict, headers: dict | None = None) -> str:
+    """Make a PATCH request to a URL."""
+    with httpx.Client(timeout=60.0) as client:
+        return client.patch(url, json=json_data, headers=headers).text
+
+
 async def run_code(code: str, api_key: str | None = None) -> CodeExecutionResult:
     """run code"""
 
     try:
         m = pydantic_monty.Monty(
             code,
-            external_functions=["http_get", "http_post", "http_delete"],
+            external_functions=["http_get", "http_post", "http_delete", "http_patch"],
         )
         printed_lines: list[str] = []
 
@@ -45,7 +51,7 @@ async def run_code(code: str, api_key: str | None = None) -> CodeExecutionResult
 
         await asyncio.to_thread(
             m.run,
-            external_functions={"http_get": http_get, "http_post": http_post, "http_delete": http_delete},
+            external_functions={"http_get": http_get, "http_post": http_post, "http_delete": http_delete, "http_patch": http_patch},
             print_callback=capture_print,
         )
         return CodeExecutionResult(output="\n".join(printed_lines), error="")
@@ -61,6 +67,7 @@ def register_tools(agent: Agent, api_key: str | None = None):
         The following external functions are available to be used directly (no imports needed):
         - http_get(url: str, headers: dict | None = None) -> str: Make a GET request and return the response text.
         - http_post(url: str, json_data: dict, headers: dict | None = None) -> str: Make a POST request with JSON data and return the response text.
+        - http_patch(url: str, json_data: dict, headers: dict | None = None) -> str: Make a PATCH request with JSON data and return the response text.
         - http_delete(url: str, headers: dict | None = None) -> str: Make a DELETE request and return the response text.
 
         IMPORTANT Monty Limitations:

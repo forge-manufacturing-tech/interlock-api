@@ -2,10 +2,8 @@
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
-/**
- * Discriminator for operations.
- */
-export enum OpType {
-    STANDARD = 'STANDARD',
-    PURCHASE = 'PURCHASE',
-}
+export type CurrencyAmount = {
+    amount: number;
+    currency_code?: string;
+};
+

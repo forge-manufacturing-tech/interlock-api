@@ -2,14 +2,14 @@
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
+import type { CurrencyAmount } from './CurrencyAmount';
 /**
- * Represents a type of labor for manual operations.
+ * A purchasing operation for raw materials.
  */
-export type LaborNode = {
+export type PurchaseNode = {
     id?: string;
     name?: (string | null);
     description?: (string | null);
-    hourly_rate?: number;
-    skill_level?: (string | null);
+    cost: CurrencyAmount;
 };
 

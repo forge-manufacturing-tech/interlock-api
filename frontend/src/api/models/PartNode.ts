@@ -2,20 +2,17 @@
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
+import type { OperationNode } from './OperationNode';
+import type { PurchaseNode } from './PurchaseNode';
 /**
  * A physical thing: raw material, sub-assembly, or finished product.
- * Each part is created by exactly one operation (purchase or assembly).
- *
- * ``unit_of_measure`` defines what "1 unit" of this part means — e.g.
- * "each", "kg", "meter", "liter".  This is critical for correct
- * quantity calculations in BOMs and quotes.
+ * Each part is created by EXACTLY one operation (PurchaseNode or OperationNode).
  */
 export type PartNode = {
     id?: string;
     name?: (string | null);
     description?: (string | null);
     unit_of_measure?: string;
-    created_by_id?: (string | null);
-    created_by_type?: (string | null);
+    child_node?: (OperationNode | PurchaseNode | null);
 };
 

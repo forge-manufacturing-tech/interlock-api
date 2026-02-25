@@ -6,9 +6,8 @@ from models.main import (
     CurrencyAmount,
     LaborNode,
     OperationNode,
-    OpType,
     PartNode,
-    QuantityInput,
+    PurchaseNode,
     ToolNode,
 )
 from orm.main import (
@@ -19,14 +18,11 @@ from orm.main import (
     get_bom,
     get_full_timeline,
     get_leaf_currencies,
-    get_operation,
     get_part,
     list_labor,
     list_tools,
     manufacture_part,
     purchase_part,
-    update_operation,
-    update_operation_inputs,
     update_part,
     validate_tree,
 )
@@ -49,18 +45,13 @@ class PurchaseRequest(BaseModel):
 class AssembleRequest(BaseModel):
     name: str
     input_part_ids: list[UUID]
-    quantities: list[float] | None = None
     description: str | None = None
     instructions: str | None = None
     yield_rate: float = 1.0
     setup_time_minutes: float = 0.0
     estimated_duration_minutes: float = 0.0
-    labor_ids: list[UUID] | None = None
-    labor_quantities: list[float] | None = None
-    labor_units: list[str] | None = None
-    tool_ids: list[UUID] | None = None
-    tool_quantities: list[float] | None = None
-    tool_units: list[str] | None = None
+    labor_id: UUID | None = None
+    tool_id: UUID | None = None
 
 
 class CreateLaborRequest(BaseModel):
@@ -72,7 +63,7 @@ class CreateLaborRequest(BaseModel):
 
 class CreateToolRequest(BaseModel):
     name: str
-    linked_part_id: UUID
+    linked_part_id: UUID | None = None
     cost_rate: float
     rate_unit: str = "hour"
     setup_time_minutes: float = 0.0
@@ -91,13 +82,6 @@ class UpdateOperationRequest(BaseModel):
     yield_rate: float | None = None
     setup_time_minutes: float | None = None
     estimated_duration_minutes: float | None = None
-
-
-class UpdateOperationInputsRequest(BaseModel):
-    input_parts: list[QuantityInput] | None = None
-    input_labor: list[QuantityInput] | None = None
-    input_tools: list[QuantityInput] | None = None
-    input_currencies: list[QuantityInput] | None = None
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────
@@ -119,16 +103,15 @@ async def purchase_material_endpoint(
         description=req.description or f"Purchased {req.name}",
         unit_of_measure=req.unit_of_measure,
     )
-    op_id = uuid4()
-    op = OperationNode(
-        id=op_id,
+    cost_obj = CurrencyAmount(amount=req.cost, currency_code=req.currency)
+    op = PurchaseNode(
+        id=uuid4(),
         name=f"Purchase {req.name}",
         description=f"Purchase transaction for {req.name}",
-        op_type=OpType.PURCHASE,
+        cost=cost_obj,
     )
-    cost_obj = CurrencyAmount(amount=req.cost, currency_code=req.currency)
     try:
-        return purchase_part(part, op, [cost_obj])
+        return purchase_part(part, op)
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
 
@@ -144,33 +127,41 @@ async def assemble_part_endpoint(
     if not req.input_part_ids:
         raise HTTPException(status_code=400, detail="At least one input part is required.")
 
-    if not (req.labor_ids or req.tool_ids):
+    if len(req.input_part_ids) > 2:
+        raise HTTPException(status_code=400, detail="A maximum of two parts are allowed.")
+
+    if not (req.labor_id or req.tool_id):
         raise HTTPException(status_code=400, detail="At least one labor or tool is required.")
 
-    if req.quantities and len(req.quantities) != len(req.input_part_ids):
-        raise HTTPException(status_code=400, detail="Quantities length must match input_part_ids.")
+    part_nodes = []
+    for pid in req.input_part_ids:
+        p = get_part(pid)
+        if not p:
+            raise HTTPException(status_code=404, detail=f"Input Part ID {pid} NOT FOUND.")
+        part_nodes.append(p)
 
-    # Build part inputs
-    part_inputs = []
-    for i, pid in enumerate(req.input_part_ids):
-        qty = req.quantities[i] if req.quantities else 1.0
-        part_inputs.append(QuantityInput(resource_id=pid, quantity=qty, unit="each"))
+    if len(part_nodes) == 1:
+        part_nodes_tuple = (part_nodes[0], None)
+    elif len(part_nodes) == 2:
+        part_nodes_tuple = (part_nodes[0], part_nodes[1])
+    else:
+        part_nodes_tuple = None
 
-    # Build labor inputs
-    labor_inputs: list[QuantityInput] = []
-    if req.labor_ids:
-        for i, lid in enumerate(req.labor_ids):
-            qty = req.labor_quantities[i] if req.labor_quantities else 1.0
-            unit = req.labor_units[i] if req.labor_units else "hours"
-            labor_inputs.append(QuantityInput(resource_id=lid, quantity=qty, unit=unit))
+    labor_node = None
+    if req.labor_id:
+        from orm.main import get_node_by_id
 
-    # Build tool inputs
-    tool_inputs: list[QuantityInput] = []
-    if req.tool_ids:
-        for i, tid in enumerate(req.tool_ids):
-            qty = req.tool_quantities[i] if req.tool_quantities else 1.0
-            unit = req.tool_units[i] if req.tool_units else "hours"
-            tool_inputs.append(QuantityInput(resource_id=tid, quantity=qty, unit=unit))
+        labor_node = get_node_by_id(req.labor_id)
+        if not labor_node or not isinstance(labor_node, LaborNode):
+            raise HTTPException(status_code=404, detail=f"Labor ID {req.labor_id} NOT FOUND.")
+
+    tool_node = None
+    if req.tool_id:
+        from orm.main import get_node_by_id
+
+        tool_node = get_node_by_id(req.tool_id)
+        if not tool_node or not isinstance(tool_node, ToolNode):
+            raise HTTPException(status_code=404, detail=f"Tool ID {req.tool_id} NOT FOUND.")
 
     part_id = uuid4()
     part = PartNode(
@@ -178,20 +169,21 @@ async def assemble_part_endpoint(
         name=req.name,
         description=req.description or f"Assembled {req.name}",
     )
-    op_id = uuid4()
     op = OperationNode(
-        id=op_id,
+        id=uuid4(),
         name=f"Assemble {req.name}",
         description=f"Assembly/manufacturing operation for {req.name}",
-        op_type=OpType.STANDARD,
         instructions=req.instructions,
         yield_rate=req.yield_rate,
         setup_time_minutes=req.setup_time_minutes,
         estimated_duration_minutes=req.estimated_duration_minutes,
+        labor_node=labor_node,
+        tool_node=tool_node,
+        part_nodes=part_nodes_tuple,
     )
 
     try:
-        return manufacture_part(part, op, part_inputs, labor_inputs, tool_inputs)
+        return manufacture_part(part, op)
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
 
@@ -277,9 +269,6 @@ async def get_part_timeline_endpoint(
 ):
     """Get the full manufacturing timeline for a part."""
     try:
-        # get_full_timeline returns BaseNode list, which is polymorphic
-        # FastAPI might struggle with strict List[BaseNode] if not handled,
-        # allowing implicit dict return is safer here given polymorphic nature.
         return get_full_timeline(part_id)
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
@@ -308,47 +297,7 @@ async def patch_operation_endpoint(
     current_user: dict = Depends(get_current_user),
 ):
     """Update operation details."""
-    op = get_operation(op_id)
-    if not op:
-        raise HTTPException(status_code=404, detail="Operation not found")
-
-    if req.name is not None:
-        op.name = req.name
-    if req.description is not None:
-        op.description = req.description
-    if req.instructions is not None:
-        op.instructions = req.instructions
-    if req.yield_rate is not None:
-        op.yield_rate = req.yield_rate
-    if req.setup_time_minutes is not None:
-        op.setup_time_minutes = req.setup_time_minutes
-    if req.estimated_duration_minutes is not None:
-        op.estimated_duration_minutes = req.estimated_duration_minutes
-
-    try:
-        return update_operation(op)
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
-
-
-@router.put("/operations/{op_id}/inputs")
-async def update_operation_inputs_endpoint(
-    op_id: UUID,
-    req: UpdateOperationInputsRequest,
-    current_user: dict = Depends(get_current_user),
-):
-    """Update operation inputs (parts, labor, tools, currencies)."""
-    try:
-        update_operation_inputs(
-            op_id=op_id,
-            input_parts=req.input_parts,
-            input_labor=req.input_labor,
-            input_tools=req.input_tools,
-            input_currencies=req.input_currencies,
-        )
-        return {"status": "success"}
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
+    raise HTTPException(status_code=400, detail="Operations are now embedded in parts, update the entire part to modify operations.")
 
 
 # ── Labor Endpoints ───────────────────────────────────────────────────

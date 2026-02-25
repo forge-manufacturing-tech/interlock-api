@@ -60,11 +60,10 @@ const CustomPartNode = ({
       )}
 
       <div
-        className={`relative w-64 rounded-xl border-2 bg-surface p-4 transition-all duration-300 ${
-          data.selected
-            ? "border-primary shadow-[0_0_20px_rgba(236,91,19,0.2)]"
-            : "border-border hover:border-text-muted"
-        }`}
+        className={`relative w-64 rounded-xl border-2 bg-surface p-4 transition-all duration-300 ${data.selected
+          ? "border-primary shadow-[0_0_20px_rgba(236,91,19,0.2)]"
+          : "border-border hover:border-text-muted"
+          }`}
       >
         <Handle
           type="target"
@@ -153,8 +152,9 @@ const generateFlowElements = (
   const nodes: Node[] = [];
   const edges: Edge[] = [];
 
+  /* eslint-disable @typescript-eslint/no-explicit-any */
   const traverse = (
-    node: NodeData,
+    node: any,
     depth: number,
     x: number,
     parentId?: string,
@@ -169,7 +169,7 @@ const generateFlowElements = (
       position: { x: x * 300, y: depth * 220 },
       data: {
         ...node,
-        selected: selectedId === node.id,
+        selected: selectedId === id, // fix selection comparing directly
         onAddChild,
       },
     });
@@ -185,15 +185,48 @@ const generateFlowElements = (
       });
     }
 
-    // Traverse children
+    // Determine children internally since backend schema uses properties directly rather than `children` array
+    let childrenToTraverse: any[] = [];
     if (node.children) {
-      node.children.forEach((child, index) => {
+      childrenToTraverse = [...node.children];
+    } else if (node.child_node) {
+      // It's a PartNode, child_node holds the operation/purchase
+      const op = { ...node.child_node };
+      if (!op.type) {
+        op.type = op.cost ? "currency" : "operation";
+      }
+      childrenToTraverse.push(op);
+    } else {
+      // Could be an OperationNode (has part_nodes, labor_node, tool_node) or PurchaseNode (has cost)
+      if (node.part_nodes) {
+        node.part_nodes.forEach((pn: any) => {
+          if (pn) childrenToTraverse.push({ ...pn, type: "part" });
+        });
+      }
+      if (node.labor_node) {
+        childrenToTraverse.push({ ...node.labor_node, type: "labor" });
+      }
+      if (node.tool_node) {
+        childrenToTraverse.push({ ...node.tool_node, type: "tool" });
+      }
+      if (node.cost && node.type !== "currency") { // node is PurchaseNode
+        childrenToTraverse.push({
+          id: `cost-${id}`,
+          name: `${node.cost.currency_code} ${node.cost.amount}`,
+          type: "currency"
+        });
+      }
+    }
+
+    if (childrenToTraverse.length > 0) {
+      childrenToTraverse.forEach((child, index) => {
         // Spread children around parent's X position
-        const childX = x + (index - (node.children!.length - 1) / 2);
+        const childX = x + (index - (childrenToTraverse.length - 1) / 2);
         traverse(child, depth + 1, childX, id, `${path}-${index}`);
       });
     }
   };
+  /* eslint-enable @typescript-eslint/no-explicit-any */
 
   traverse(treeData, 0, 0);
   return { nodes, edges };

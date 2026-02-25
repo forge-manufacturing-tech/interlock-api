@@ -2,10 +2,6 @@
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
-/**
- * Reference to a file stored in blob storage.
- * Associated with either a Part or an Operation.
- */
 export type FileAttachment = {
     id?: string;
     name: string;

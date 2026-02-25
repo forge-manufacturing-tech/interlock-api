@@ -11,7 +11,6 @@ import type { OperationNode } from '../models/OperationNode';
 import type { PartNode } from '../models/PartNode';
 import type { PurchaseRequest } from '../models/PurchaseRequest';
 import type { ToolNode } from '../models/ToolNode';
-import type { UpdateOperationInputsRequest } from '../models/UpdateOperationInputsRequest';
 import type { UpdateOperationRequest } from '../models/UpdateOperationRequest';
 import type { CancelablePromise } from '../core/CancelablePromise';
 import { OpenAPI } from '../core/OpenAPI';
@@ -229,31 +228,6 @@ export class ManufacturingService {
         return __request(OpenAPI, {
             method: 'PATCH',
             url: '/operations/{op_id}',
-            path: {
-                'op_id': opId,
-            },
-            body: requestBody,
-            mediaType: 'application/json',
-            errors: {
-                422: `Validation Error`,
-            },
-        });
-    }
-    /**
-     * Update Operation Inputs Endpoint
-     * Update operation inputs (parts, labor, tools, currencies).
-     * @param opId
-     * @param requestBody
-     * @returns any Successful Response
-     * @throws ApiError
-     */
-    public static updateOperationInputsEndpointOperationsOpIdInputsPut(
-        opId: string,
-        requestBody: UpdateOperationInputsRequest,
-    ): CancelablePromise<any> {
-        return __request(OpenAPI, {
-            method: 'PUT',
-            url: '/operations/{op_id}/inputs',
             path: {
                 'op_id': opId,
             },

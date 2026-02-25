@@ -4,7 +4,7 @@
 /* eslint-disable */
 export type CreateToolRequest = {
     name: string;
-    linked_part_id: string;
+    linked_part_id?: (string | null);
     cost_rate: number;
     rate_unit?: string;
     setup_time_minutes?: number;
