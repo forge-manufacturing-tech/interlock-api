@@ -3,9 +3,7 @@ name = "models"
 version = "0.1.0"
 description = "Pydantic models for the Interlock manufacturing graph"
 readme = "README.md"
-authors = [
-    { name = "Nathan Alam", email = "nathanalam99@gmail.com" }
-]
+authors = []
 requires-python = ">=3.12"
 dependencies = [
     "pydantic>=2.0.0",
