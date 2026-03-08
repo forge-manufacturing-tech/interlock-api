@@ -186,7 +186,7 @@ export default function LandingPage() {
             Architects of the new standard
           </h2>
 
-          <div className="mt-16 grid gap-12 md:grid-cols-3">
+          <div className="mt-16 grid gap-12 md:grid-cols-2">
             <div className="text-center">
               <div className="mx-auto mb-6 h-48 w-48 overflow-hidden rounded-full border border-primary/20 bg-surface-light grayscale hover:grayscale-0 transition-all duration-500">
                 <img
@@ -211,17 +211,6 @@ export default function LandingPage() {
               <p className="mt-2 font-mono text-xs uppercase tracking-wider text-primary">Co-Founder</p>
             </div>
 
-            <div className="text-center">
-              <div className="mx-auto mb-6 h-48 w-48 overflow-hidden rounded-full border border-primary/20 bg-surface-light grayscale hover:grayscale-0 transition-all duration-500">
-                <img
-                  src="/assets/team/nathan.png"
-                  alt="Nathan Alam"
-                  className="h-full w-full object-cover"
-                />
-              </div>
-              <h3 className="font-mono text-xl font-bold text-text-primary">Nathan Alam</h3>
-              <p className="mt-2 font-mono text-xs uppercase tracking-wider text-primary">Co-Founder</p>
-            </div>
           </div>
         </div>
       </motion.section>

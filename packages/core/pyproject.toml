@@ -3,9 +3,7 @@ name = "core"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
-authors = [
-    { name = "Nathan Alam", email = "nathanalam99@gmail.com" }
-]
+authors = []
 requires-python = ">=3.12"
 dependencies = []
 
